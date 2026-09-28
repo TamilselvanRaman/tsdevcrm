@@ -1,26 +1,37 @@
 "use client";
 
 import { useState } from "react";
-import { Clock, Play, Pause, LogOut, CheckCircle2, Calendar } from "lucide-react";
+import { Clock, Play, Pause, LogOut, CheckCircle2, Calendar, LogIn } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 
 export default function AttendancePage() {
   const { currentUserId, users, attendance, checkIn, startBreak, endBreak, checkOut } = useAppStore();
 
   const currentUser = users.find((u) => u.id === currentUserId) || users[0];
-  const todayStr = "2026-09-28";
-  const myRecord = attendance.find((a) => a.memberId === currentUser.id && a.date === todayStr) || {
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  // Find today's actual record — if none, user hasn't checked in yet
+  const todayRecord = attendance.find((a) => a.memberId === currentUser.id && a.date === todayStr);
+  const isCheckedIn = !!todayRecord;
+
+  const myRecord = todayRecord || {
     id: "att-curr",
     memberId: currentUser.id,
     memberName: currentUser.fullName,
     date: todayStr,
     status: "Present" as const,
-    checkInTime: "09:15 AM",
+    checkInTime: "--:-- --",
     breakStatus: "Working" as const,
-    workingHours: "7h 20m",
+    workingHours: "0h 0m",
   };
 
   const [toastMessage, setToastMessage] = useState("");
+
+  const handleCheckIn = () => {
+    checkIn(currentUser.id);
+    setToastMessage("✅ Checked in successfully! Have a productive day.");
+    setTimeout(() => setToastMessage(""), 4000);
+  };
 
   const handleStartBreak = () => {
     startBreak(currentUser.id);
@@ -74,32 +85,46 @@ export default function AttendancePage() {
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-3">
-          {myRecord.breakStatus === "Working" ? (
+          {!isCheckedIn ? (
+            /* === CHECK IN BUTTON === */
             <button
-              onClick={handleStartBreak}
-              className="flex items-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-xs font-semibold text-[#0F172A] hover:bg-[#F8FAFC] shadow-2xs"
+              onClick={handleCheckIn}
+              className="flex items-center gap-2 rounded-xl bg-[#16A34A] px-5 py-2.5 text-xs font-semibold text-white hover:bg-green-700 shadow-md shadow-green-500/20"
             >
-              <Pause className="h-4 w-4 text-[#F59E0B]" />
-              <span>Start Break</span>
+              <LogIn className="h-4 w-4" />
+              <span>Check In — Start Workday</span>
             </button>
           ) : (
-            <button
-              onClick={handleEndBreak}
-              className="flex items-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-xs font-semibold text-[#0F172A] hover:bg-[#F8FAFC] shadow-2xs"
-            >
-              <Play className="h-4 w-4 text-[#16A34A]" />
-              <span>End Break</span>
-            </button>
-          )}
+            <>
+              {myRecord.breakStatus === "Working" ? (
+                <button
+                  onClick={handleStartBreak}
+                  className="flex items-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-xs font-semibold text-[#0F172A] hover:bg-[#F8FAFC] shadow-2xs"
+                >
+                  <Pause className="h-4 w-4 text-[#F59E0B]" />
+                  <span>Start Break</span>
+                </button>
+              ) : (
+                <button
+                  onClick={handleEndBreak}
+                  className="flex items-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-xs font-semibold text-[#0F172A] hover:bg-[#F8FAFC] shadow-2xs"
+                >
+                  <Play className="h-4 w-4 text-[#16A34A]" />
+                  <span>End Break</span>
+                </button>
+              )}
 
-          <button
-            onClick={handleCheckOut}
-            className="flex items-center gap-2 rounded-xl bg-[#DC2626] px-4 py-2.5 text-xs font-semibold text-white hover:bg-red-700 shadow-2xs"
-          >
-            <LogOut className="h-4 w-4" />
-            <span>Check Out</span>
-          </button>
+              <button
+                onClick={handleCheckOut}
+                className="flex items-center gap-2 rounded-xl bg-[#DC2626] px-4 py-2.5 text-xs font-semibold text-white hover:bg-red-700 shadow-2xs"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Check Out</span>
+              </button>
+            </>
+          )}
         </div>
+
       </div>
 
       {/* Weekly Summary */}
