@@ -25,19 +25,13 @@ import {
   PaymentRecord,
   ProjectDocument,
   NotificationItem,
+  ClientRecord,
+  ExpenseRecord,
+  NoteItem,
+  NoticeItem,
+  FollowUpItem,
+  TeamGroup,
 } from "@/types";
-import {
-  INITIAL_USERS,
-  INITIAL_ENQUIRIES,
-  INITIAL_PROJECTS,
-  INITIAL_TASKS,
-  INITIAL_DAILY_REPORTS,
-  INITIAL_ATTENDANCE,
-  INITIAL_INVOICES,
-  INITIAL_PAYMENTS,
-  INITIAL_PROJECT_DOCUMENTS,
-  INITIAL_NOTIFICATIONS,
-} from "./mockData";
 
 // Collection Names
 export const COLLECTIONS = {
@@ -51,6 +45,12 @@ export const COLLECTIONS = {
   PAYMENTS: "payments",
   DOCUMENTS: "documents",
   NOTIFICATIONS: "notifications",
+  CLIENTS: "clients",
+  EXPENSES: "expenses",
+  NOTES: "notes",
+  NOTICES: "notices",
+  FOLLOW_UPS: "follow_ups",
+  TEAMS: "teams",
 } as const;
 
 // ============================================================================
@@ -180,6 +180,10 @@ export const saveDailyReport = async (report: DailyWorkReport): Promise<void> =>
   await setDoc(ref, report, { merge: true });
 };
 
+export const deleteDailyReport = async (id: string): Promise<void> => {
+  await deleteDoc(doc(db, COLLECTIONS.DAILY_REPORTS, id));
+};
+
 export const subscribeAttendance = (onData: (data: AttendanceRecord[]) => void): Unsubscribe => {
   const q = query(collection(db, COLLECTIONS.ATTENDANCE));
   return onSnapshot(
@@ -198,6 +202,10 @@ export const subscribeAttendance = (onData: (data: AttendanceRecord[]) => void):
 export const saveAttendance = async (rec: AttendanceRecord): Promise<void> => {
   const ref = doc(db, COLLECTIONS.ATTENDANCE, rec.id);
   await setDoc(ref, rec, { merge: true });
+};
+
+export const deleteAttendance = async (id: string): Promise<void> => {
+  await deleteDoc(doc(db, COLLECTIONS.ATTENDANCE, id));
 };
 
 // ============================================================================
@@ -221,6 +229,10 @@ export const subscribeInvoices = (onData: (data: Invoice[]) => void): Unsubscrib
 export const saveInvoice = async (inv: Invoice): Promise<void> => {
   const ref = doc(db, COLLECTIONS.INVOICES, inv.id);
   await setDoc(ref, inv, { merge: true });
+};
+
+export const deleteInvoice = async (id: string): Promise<void> => {
+  await deleteDoc(doc(db, COLLECTIONS.INVOICES, id));
 };
 
 // ============================================================================
@@ -251,52 +263,164 @@ export const deleteDocument = async (id: string): Promise<void> => {
 };
 
 // ============================================================================
-// 8. AUTO-SEED DATABASE IF INITIAL FIREBASE IS EMPTY
+// 8. CLIENTS SERVICE
 // ============================================================================
-export const seedFirestoreIfEmpty = async (): Promise<boolean> => {
-  try {
-    const snap = await getDocs(collection(db, COLLECTIONS.USERS));
-    if (!snap.empty) {
-      return false; // Already seeded
+export const subscribeClients = (onData: (data: ClientRecord[]) => void): Unsubscribe => {
+  const q = query(collection(db, COLLECTIONS.CLIENTS));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list: ClientRecord[] = [];
+      snap.forEach((d) => list.push({ ...d.data(), id: d.id } as ClientRecord));
+      onData(list);
+    },
+    (err) => {
+      console.warn("Firestore clients subscription notice:", err.message);
     }
-
-    const batch = writeBatch(db);
-
-    INITIAL_USERS.forEach((u) => {
-      batch.set(doc(db, COLLECTIONS.USERS, u.id), u);
-    });
-    INITIAL_ENQUIRIES.forEach((e) => {
-      batch.set(doc(db, COLLECTIONS.ENQUIRIES, e.id), e);
-    });
-    INITIAL_PROJECTS.forEach((p) => {
-      batch.set(doc(db, COLLECTIONS.PROJECTS, p.id), p);
-    });
-    INITIAL_TASKS.forEach((t) => {
-      batch.set(doc(db, COLLECTIONS.TASKS, t.id), t);
-    });
-    INITIAL_DAILY_REPORTS.forEach((d) => {
-      batch.set(doc(db, COLLECTIONS.DAILY_REPORTS, d.id), d);
-    });
-    INITIAL_ATTENDANCE.forEach((a) => {
-      batch.set(doc(db, COLLECTIONS.ATTENDANCE, a.id), a);
-    });
-    INITIAL_INVOICES.forEach((i) => {
-      batch.set(doc(db, COLLECTIONS.INVOICES, i.id), i);
-    });
-    INITIAL_PAYMENTS.forEach((p) => {
-      batch.set(doc(db, COLLECTIONS.PAYMENTS, p.id), p);
-    });
-    INITIAL_PROJECT_DOCUMENTS.forEach((docObj) => {
-      batch.set(doc(db, COLLECTIONS.DOCUMENTS, docObj.id), docObj);
-    });
-    INITIAL_NOTIFICATIONS.forEach((n) => {
-      batch.set(doc(db, COLLECTIONS.NOTIFICATIONS, n.id), n);
-    });
-
-    await batch.commit();
-    return true;
-  } catch (error) {
-    console.warn("Firestore seed notice (offline/permission):", error);
-    return false;
-  }
+  );
 };
+
+export const saveClient = async (client: ClientRecord): Promise<void> => {
+  const ref = doc(db, COLLECTIONS.CLIENTS, client.id);
+  await setDoc(ref, client, { merge: true });
+};
+
+export const deleteClient = async (id: string): Promise<void> => {
+  await deleteDoc(doc(db, COLLECTIONS.CLIENTS, id));
+};
+
+// ============================================================================
+// 9. EXPENSES SERVICE
+// ============================================================================
+export const subscribeExpenses = (onData: (data: ExpenseRecord[]) => void): Unsubscribe => {
+  const q = query(collection(db, COLLECTIONS.EXPENSES));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list: ExpenseRecord[] = [];
+      snap.forEach((d) => list.push({ ...d.data(), id: d.id } as ExpenseRecord));
+      onData(list);
+    },
+    (err) => {
+      console.warn("Firestore expenses subscription notice:", err.message);
+    }
+  );
+};
+
+export const saveExpense = async (expense: ExpenseRecord): Promise<void> => {
+  const ref = doc(db, COLLECTIONS.EXPENSES, expense.id);
+  await setDoc(ref, expense, { merge: true });
+};
+
+export const deleteExpense = async (id: string): Promise<void> => {
+  await deleteDoc(doc(db, COLLECTIONS.EXPENSES, id));
+};
+
+// ============================================================================
+// 10. WORKSPACE NOTES SERVICE
+// ============================================================================
+export const subscribeNotes = (onData: (data: NoteItem[]) => void): Unsubscribe => {
+  const q = query(collection(db, COLLECTIONS.NOTES));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list: NoteItem[] = [];
+      snap.forEach((d) => list.push({ ...d.data(), id: d.id } as NoteItem));
+      onData(list);
+    },
+    (err) => {
+      console.warn("Firestore notes subscription notice:", err.message);
+    }
+  );
+};
+
+export const saveNote = async (note: NoteItem): Promise<void> => {
+  const ref = doc(db, COLLECTIONS.NOTES, note.id);
+  await setDoc(ref, note, { merge: true });
+};
+
+export const deleteNote = async (id: string): Promise<void> => {
+  await deleteDoc(doc(db, COLLECTIONS.NOTES, id));
+};
+
+// ============================================================================
+// 11. WORKSPACE NOTICES SERVICE
+// ============================================================================
+export const subscribeNotices = (onData: (data: NoticeItem[]) => void): Unsubscribe => {
+  const q = query(collection(db, COLLECTIONS.NOTICES));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list: NoticeItem[] = [];
+      snap.forEach((d) => list.push({ ...d.data(), id: d.id } as NoticeItem));
+      onData(list);
+    },
+    (err) => {
+      console.warn("Firestore notices subscription notice:", err.message);
+    }
+  );
+};
+
+export const saveNotice = async (notice: NoticeItem): Promise<void> => {
+  const ref = doc(db, COLLECTIONS.NOTICES, notice.id);
+  await setDoc(ref, notice, { merge: true });
+};
+
+export const deleteNotice = async (id: string): Promise<void> => {
+  await deleteDoc(doc(db, COLLECTIONS.NOTICES, id));
+};
+
+// ============================================================================
+// 12. FOLLOW-UPS SERVICE
+// ============================================================================
+export const subscribeFollowUps = (onData: (data: FollowUpItem[]) => void): Unsubscribe => {
+  const q = query(collection(db, COLLECTIONS.FOLLOW_UPS));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list: FollowUpItem[] = [];
+      snap.forEach((d) => list.push({ ...d.data(), id: d.id } as FollowUpItem));
+      onData(list);
+    },
+    (err) => {
+      console.warn("Firestore followups subscription notice:", err.message);
+    }
+  );
+};
+
+export const saveFollowUp = async (followUp: FollowUpItem): Promise<void> => {
+  const ref = doc(db, COLLECTIONS.FOLLOW_UPS, followUp.id);
+  await setDoc(ref, followUp, { merge: true });
+};
+
+export const deleteFollowUp = async (id: string): Promise<void> => {
+  await deleteDoc(doc(db, COLLECTIONS.FOLLOW_UPS, id));
+};
+
+// ============================================================================
+// 13. TEAMS STRUCTURE SERVICE
+// ============================================================================
+export const subscribeTeams = (onData: (data: TeamGroup[]) => void): Unsubscribe => {
+  const q = query(collection(db, COLLECTIONS.TEAMS));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list: TeamGroup[] = [];
+      snap.forEach((d) => list.push({ ...d.data(), id: d.id } as TeamGroup));
+      onData(list);
+    },
+    (err) => {
+      console.warn("Firestore teams subscription notice:", err.message);
+    }
+  );
+};
+
+export const saveTeam = async (team: TeamGroup): Promise<void> => {
+  const ref = doc(db, COLLECTIONS.TEAMS, team.id);
+  await setDoc(ref, team, { merge: true });
+};
+
+export const deleteTeam = async (id: string): Promise<void> => {
+  await deleteDoc(doc(db, COLLECTIONS.TEAMS, id));
+};
+

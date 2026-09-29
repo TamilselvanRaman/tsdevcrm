@@ -30,9 +30,11 @@ import { useAppStore } from "@/store/useAppStore";
 import { UserRole, UserTeam, UserPermissions, User } from "@/types";
 import { DEFAULT_PERMISSIONS } from "@/lib/mockData";
 import { registerUser } from "@/lib/firebaseAuth";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export default function TeamMembersPage() {
-  const { users, addUser, updateUserPermissions, toggleUserStatus, deleteUser, tasks } = useAppStore();
+  const { users, addUser, updateUser, updateUserPermissions, toggleUserStatus, deleteUser, tasks } = useAppStore();
 
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [search, setSearch] = useState("");
@@ -40,6 +42,9 @@ export default function TeamMembersPage() {
   const [teamFilter, setTeamFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [deletingUser, setDeletingUser] = useState<User | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState("");
 
@@ -53,6 +58,15 @@ export default function TeamMembersPage() {
   const [role, setRole] = useState<UserRole>("Developer");
   const [team, setTeam] = useState<UserTeam>("Development");
   const [status, setStatus] = useState<"Active" | "Inactive">("Active");
+
+  // Edit Member Form state
+  const [editFullName, setEditFullName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editUsername, setEditUsername] = useState("");
+  const [editRole, setEditRole] = useState<UserRole>("Developer");
+  const [editTeam, setEditTeam] = useState<UserTeam>("Development");
+  const [editStatus, setEditStatus] = useState<"Active" | "Inactive">("Active");
 
   // Permission checkboxes state for add modal & drawer
   const [permissions, setPermissions] = useState<UserPermissions>({ ...DEFAULT_PERMISSIONS });
@@ -113,6 +127,45 @@ export default function TeamMembersPage() {
     setPassword("");
     setConfirmPassword("");
     setPermissions({ ...DEFAULT_PERMISSIONS });
+  };
+
+  const handleOpenEditModal = (u: User) => {
+    setEditingUser(u);
+    setEditFullName(u.fullName);
+    setEditEmail(u.email);
+    setEditPhone(u.phone);
+    setEditUsername(u.username);
+    setEditRole(u.role);
+    setEditTeam(u.team);
+    setEditStatus(u.status);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEditUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    updateUser(editingUser.id, {
+      fullName: editFullName.trim(),
+      email: editEmail.trim(),
+      phone: editPhone.trim(),
+      username: editUsername.trim(),
+      role: editRole,
+      team: editTeam,
+      status: editStatus,
+    });
+    setIsEditModalOpen(false);
+    setEditingUser(null);
+    showToast(`Profile for ${editFullName} updated successfully!`);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deletingUser) return;
+    deleteUser(deletingUser.id);
+    if (selectedUserId === deletingUser.id) {
+      setSelectedUserId(null);
+    }
+    setDeletingUser(null);
+    showToast("Team member deleted.");
   };
 
   const handleTogglePermission = (userId: string, key: keyof UserPermissions) => {
@@ -459,25 +512,32 @@ export default function TeamMembersPage() {
                         <td className="text-xs text-[#64748B]">{u.lastActive}</td>
                         <td className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
                           <button
+                            type="button"
                             onClick={() => setSelectedUserId(u.id)}
-                            className="inline-flex p-1.5 text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors"
+                            className="inline-flex p-1.5 text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                             title="RBAC Permissions & Details"
                           >
                             <Shield className="h-4 w-4" />
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(u)}
+                            className="inline-flex p-1.5 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                            title="Edit Member"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
                           <Link
-                            href={`/team/members/${u.id}`}
+                            href={`/crm/admin/team/members/${u.id}`}
                             className="inline-flex p-1.5 text-[#64748B] hover:text-[#0F172A] hover:bg-slate-100 rounded-lg transition-colors"
                             title="Full Profile"
                           >
                             <Eye className="h-4 w-4" />
                           </Link>
                           <button
-                            onClick={() => {
-                              deleteUser(u.id);
-                              showToast("Team member removed.");
-                            }}
-                            className="inline-flex p-1.5 text-[#DC2626] hover:bg-red-50 rounded-lg transition-colors"
+                            type="button"
+                            onClick={() => setDeletingUser(u)}
+                            className="inline-flex p-1.5 text-[#DC2626] hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                             title="Remove Member"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -560,9 +620,24 @@ export default function TeamMembersPage() {
                   >
                     {u.team}
                   </span>
-                  <span className="text-[11px] font-bold text-[#2563EB]">
-                    {memberTasksCount} Active Tasks
-                  </span>
+                  <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditModal(u)}
+                      className="p-1 rounded text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 transition-colors cursor-pointer"
+                      title="Edit Member"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeletingUser(u)}
+                      className="p-1 rounded text-[#64748B] hover:text-[#DC2626] hover:bg-red-50 transition-colors cursor-pointer"
+                      title="Remove Member"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -594,8 +669,26 @@ export default function TeamMembersPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditModal(selectedUser)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#E2E8F0] bg-white text-xs font-semibold text-[#0F172A] hover:bg-slate-50 transition-colors cursor-pointer"
+                    title="Edit Member Profile"
+                  >
+                    <Edit2 className="h-3.5 w-3.5 text-[#2563EB]" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeletingUser(selectedUser)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50 text-xs font-semibold text-[#DC2626] hover:bg-red-100 transition-colors cursor-pointer"
+                    title="Delete Member"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Delete</span>
+                  </button>
                   <Link
-                    href={`/team/members/${selectedUser.id}`}
+                    href={`/crm/admin/team/members/${selectedUser.id}`}
                     className="p-1.5 rounded-lg text-[#64748B] hover:bg-slate-100 hover:text-[#0F172A]"
                     title="Full Profile"
                   >
@@ -1025,6 +1118,154 @@ export default function TeamMembersPage() {
         </div>
       </div>
     )}
+
+      {/* Edit Team Member Modal */}
+      {isEditModalOpen && editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-2xs p-4 overflow-y-auto">
+          <div className="relative w-full max-w-lg rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-2xl my-8 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-[#2563EB]">
+                  <Edit2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-[#0F172A]">Edit Member Profile</h3>
+                  <p className="text-[11px] text-[#64748B]">Update employee contact information, department and role.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingUser(null);
+                }}
+                className="p-1 rounded-lg text-[#64748B] hover:bg-slate-100 hover:text-[#0F172A] cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditUser} className="space-y-4 text-xs">
+              <div>
+                <label className="font-semibold text-[#0F172A] block mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editFullName}
+                  onChange={(e) => setEditFullName(e.target.value)}
+                  className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Email</label>
+                  <input
+                    type="email"
+                    required
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Phone</label>
+                  <input
+                    type="text"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-semibold text-[#0F172A] block mb-1">Username</label>
+                <input
+                  type="text"
+                  required
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value)}
+                  className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Role</label>
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value as UserRole)}
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-2.5 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden"
+                  >
+                    <option value="Admin">Admin</option>
+                    <option value="Project Manager">Project Manager</option>
+                    <option value="Developer">Developer</option>
+                    <option value="Designer">Designer</option>
+                    <option value="SEO Specialist">SEO Specialist</option>
+                    <option value="Content Writer">Content Writer</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Team</label>
+                  <select
+                    value={editTeam}
+                    onChange={(e) => setEditTeam(e.target.value as UserTeam)}
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-2.5 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden"
+                  >
+                    <option value="Development">Development</option>
+                    <option value="Design">Design</option>
+                    <option value="SEO">SEO</option>
+                    <option value="Content">Content</option>
+                    <option value="Management">Management</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as "Active" | "Inactive")}
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-2.5 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-[#E2E8F0] pt-4 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setEditingUser(null);
+                  }}
+                  className="rounded-xl border border-[#E2E8F0] px-4 py-2 text-xs font-semibold text-[#64748B] hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-[#2563EB] px-5 py-2 text-xs font-bold text-white hover:bg-blue-700 shadow-xs transition-all cursor-pointer"
+                >
+                  Save Profile Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Member Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!deletingUser}
+        title="Remove Team Member"
+        message={`Are you sure you want to remove "${deletingUser?.fullName}" (@${deletingUser?.username}) from the agency team?`}
+        confirmLabel="Remove Member"
+        variant="danger"
+        onConfirm={handleDeleteConfirm}
+        onClose={() => setDeletingUser(null)}
+      />
     </div>
   );
 }

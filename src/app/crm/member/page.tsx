@@ -7,7 +7,7 @@ export default function MemberRootPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/crm/member/my-tasks");
+    router.replace("/crm/member/dashboard");
   }, [router]);
 
   return (

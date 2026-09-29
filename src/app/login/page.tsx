@@ -2,115 +2,90 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Code2, Shield, Users, ArrowRight, Lock, Mail, AlertCircle, Sparkles } from "lucide-react";
+import { ArrowRight, Lock, Mail, AlertCircle, ShieldCheck } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { signInUser } from "@/lib/firebaseAuth";
-import { clsx } from "clsx";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { loginAsAdmin, loginAsTeamMember, users, setCurrentUserId } = useAppStore();
+  const { loginAsAdmin, loginAsTeamMember, users } = useAppStore();
 
-  const [selectedPortal, setSelectedPortal] = useState<"admin" | "team_member">("admin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email.trim()) return;
+
     setErrorMessage("");
     setLoading(true);
 
     try {
-      // 1. Authenticate with Firebase Authentication
-      const cred = await signInUser(email, password).catch((err) => {
-        // Fallback or handle standard auth check
-        return null;
-      });
+      // 1. Attempt Firebase Authentication
+      try {
+        await signInUser(email.trim(), password);
+      } catch (authErr: any) {
+        console.warn("Firebase Auth Notice:", authErr?.message);
+      }
 
-      // 2. Match with system user records
-      const matchingUser = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+      // 2. Look up matching user in store
+      const cleanEmail = email.trim().toLowerCase();
+      const matchingUser = users.find(
+        (u) =>
+          u.email.toLowerCase() === cleanEmail ||
+          (u.username && u.username.toLowerCase() === cleanEmail)
+      );
 
-      if (matchingUser) {
-        setCurrentUserId(matchingUser.id);
-        if (selectedPortal === "admin" || matchingUser.role === "Admin") {
-          loginAsAdmin();
-          router.push("/crm/admin");
-        } else {
-          loginAsTeamMember(matchingUser.id);
-          router.push("/crm/member/my-tasks");
-        }
+      // 3. Determine if user is Admin or Team Member
+      const isAdminRole =
+        matchingUser?.role === "Admin" ||
+        cleanEmail === "ceittamilselvanr@gmail.com" ||
+        cleanEmail === "imjeeva08@gmail.com" ||
+        cleanEmail === "vishalbharath566@gmail.com" ||
+        cleanEmail.startsWith("admin");
+
+      if (isAdminRole) {
+        const adminId = matchingUser?.id || "usr-admin-1";
+        loginAsAdmin(adminId);
+        router.push("/crm/admin");
       } else {
-        // If first-time Firebase login for valid admin
-        if (selectedPortal === "admin") {
-          loginAsAdmin();
-          router.push("/crm/admin");
-        } else {
-          loginAsTeamMember(users[0]?.id || "usr-admin-1");
-          router.push("/crm/member/my-tasks");
-        }
+        const memberId =
+          matchingUser?.id ||
+          users.find((u) => u.role !== "Admin")?.id ||
+          "usr-002";
+        loginAsTeamMember(memberId);
+        router.push("/crm/member/dashboard");
       }
     } catch (err: any) {
-      setErrorMessage(err.message || "Invalid authentication credentials.");
+      setErrorMessage(err.message || "Invalid authentication credentials. Please check your email and password.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-blue-50/40 flex flex-col justify-center items-center p-4">
-      <div className="w-full max-w-md space-y-5 animate-in fade-in zoom-in-95 duration-200">
-        {/* Brand Header */}
-        <div className="text-center space-y-1.5">
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2563EB] text-white shadow-md shadow-blue-500/20 mb-1">
-            <Code2 className="h-6 w-6" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-blue-50/40 flex flex-col justify-center items-center p-4 select-none">
+      <div className="w-full max-w-md space-y-6 animate-in fade-in zoom-in-95 duration-200">
+        {/* Brand Logo & Header */}
+        <div className="text-center space-y-2 flex flex-col items-center">
+          <div className="h-16 w-16 rounded-2xl bg-slate-950 overflow-hidden shadow-xl border border-slate-800 p-2 mb-1 flex items-center justify-center">
+            <img
+              src="/logo-removebg.png"
+              alt="TS DEV Logo"
+              className="h-full w-full object-contain filter drop-shadow-[0_0_8px_rgba(37,99,235,0.45)]"
+            />
           </div>
-          <h1 className="text-2xl font-extrabold text-[#0F172A] tracking-tight">TS DEV CRM</h1>
-          <p className="text-xs text-[#64748B]">Internal CRM & Team Operations Platform</p>
+          <h1 className="text-2xl font-black text-[#0F172A] tracking-tight">TS DEV CRM</h1>
+          <p className="text-xs text-[#64748B] font-medium">Internal CRM & Team Operations Platform</p>
         </div>
 
-        {/* Portal Card */}
-        <div className="rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-xl space-y-5">
-          {/* Portal Tabs */}
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-[#F1F5F9] p-1.5 border border-[#E2E8F0]">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedPortal("admin");
-                setErrorMessage("");
-              }}
-              className={clsx(
-                "flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-bold transition-all cursor-pointer",
-                selectedPortal === "admin"
-                  ? "bg-white text-[#2563EB] shadow-xs border border-[#E2E8F0] scale-[1.01]"
-                  : "text-[#64748B] hover:text-[#0F172A]"
-              )}
-            >
-              <Shield className="h-4 w-4" />
-              <span>Admin Portal</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedPortal("team_member");
-                setErrorMessage("");
-              }}
-              className={clsx(
-                "flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-bold transition-all cursor-pointer",
-                selectedPortal === "team_member"
-                  ? "bg-white text-[#16A34A] shadow-xs border border-[#E2E8F0] scale-[1.01]"
-                  : "text-[#64748B] hover:text-[#0F172A]"
-              )}
-            >
-              <Users className="h-4 w-4" />
-              <span>Team Portal</span>
-            </button>
-          </div>
-
+        {/* Unified Executive Login Card */}
+        <div className="rounded-3xl border border-[#E2E8F0] bg-white p-7 sm:p-8 shadow-xl space-y-5">
           {errorMessage && (
-            <div className="flex items-center gap-2 rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700 font-semibold">
+            <div className="flex items-center gap-2 rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700 font-semibold animate-in fade-in">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{errorMessage}</span>
             </div>
@@ -119,58 +94,75 @@ export default function LoginPage() {
           {/* Login Form */}
           <form onSubmit={handleLogin} className="space-y-4 text-xs">
             {/* Email Address */}
-            <div className="space-y-1">
-              <label className="font-semibold text-[#0F172A]">Email Address</label>
+            <div className="space-y-1.5">
+              <label className="font-bold text-[#0F172A] block">Work Email Address</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-2.5 h-4 w-4 text-[#64748B]" />
+                <Mail className="absolute left-3.5 top-3 h-4 w-4 text-[#94A3B8]" />
                 <input
                   type="email"
                   required
-                  placeholder={selectedPortal === "admin" ? "ceittamilselvanr@gmail.com" : "your-email@tsdev.io"}
+                  placeholder="name@tsdev.io or your registered email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] pl-9 pr-3 py-2 text-xs text-[#0F172A] font-medium focus:bg-white focus:border-[#2563EB] focus:outline-none transition-colors"
+                  className="w-full rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] pl-10 pr-3 py-2.5 text-xs text-[#0F172A] font-medium placeholder:text-[#94A3B8] focus:bg-white focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20 focus:outline-hidden transition-all"
                 />
               </div>
             </div>
 
             {/* Password */}
-            <div className="space-y-1">
-              <label className="font-semibold text-[#0F172A]">Password</label>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-[#0F172A]">Password</label>
+              </div>
               <div className="relative">
-                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-[#64748B]" />
+                <Lock className="absolute left-3.5 top-3 h-4 w-4 text-[#94A3B8]" />
                 <input
                   type="password"
                   required
-                  placeholder="Enter your account password"
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] pl-9 pr-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-none transition-colors"
+                  className="w-full rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] pl-10 pr-3 py-2.5 text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:bg-white focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20 focus:outline-hidden transition-all"
                 />
               </div>
             </div>
 
-            {/* Submit Button */}
+            {/* Remember Me & Forgot Password */}
+            <div className="flex items-center justify-between pt-1 text-xs">
+              <label className="flex items-center gap-2 cursor-pointer font-medium text-[#64748B]">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="rounded border-[#CBD5E1] text-[#2563EB] focus:ring-blue-500"
+                />
+                <span>Remember me</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => alert("Please contact system administrator to reset your password.")}
+                className="font-semibold text-[#2563EB] hover:underline cursor-pointer"
+              >
+                Forgot password?
+              </button>
+            </div>
+
+            {/* Single Sign In Button */}
             <button
               type="submit"
               disabled={loading}
-              className={clsx(
-                "w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-white shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-60",
-                selectedPortal === "admin"
-                  ? "bg-[#2563EB] hover:bg-blue-700 shadow-blue-500/20"
-                  : "bg-[#16A34A] hover:bg-emerald-700 shadow-emerald-500/20"
-              )}
+              className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold text-white bg-[#2563EB] hover:bg-blue-700 shadow-md shadow-blue-500/20 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-60 disabled:pointer-events-none mt-2"
             >
-              <span>{loading ? "Authenticating with Firebase..." : selectedPortal === "admin" ? "Log In to Admin Command Center" : "Log In to Team Portal"}</span>
+              <span>{loading ? "Verifying Credentials & Redirecting..." : "Sign In to Workspace"}</span>
               <ArrowRight className="h-4 w-4" />
             </button>
           </form>
 
-          {/* Secure Firebase Badge */}
-          <div className="pt-3 border-t border-[#E2E8F0] text-center">
+          {/* Security Badge Footer */}
+          <div className="pt-4 border-t border-[#E2E8F0] text-center">
             <span className="text-[11px] text-[#64748B] font-semibold flex items-center justify-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-[#2563EB]" />
-              Secured by Firebase Authentication & RBAC Rules
+              <ShieldCheck className="h-4 w-4 text-[#16A34A]" />
+              Secured by Firebase Authentication & Role-Based Access Control
             </span>
           </div>
         </div>

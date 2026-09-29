@@ -28,8 +28,11 @@ import {
   HelpCircle,
   Copy,
   Check,
+  Edit2,
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { EmptyState } from "@/components/ui/EmptyState";
 import {
   ProjectDocument,
   ProjectDocumentType,
@@ -44,7 +47,7 @@ import {
 import { clsx } from "clsx";
 
 export default function QuotationsAndAgreementsPage() {
-  const { projects, documents, addDocument, updateDocumentStatus, deleteDocument } =
+  const { projects, documents, addDocument, updateDocument, updateDocumentStatus, deleteDocument } =
     useAppStore();
 
   // Filter States
@@ -54,7 +57,15 @@ export default function QuotationsAndAgreementsPage() {
 
   // Creation Wizard Modal State
   const [isWizardOpen, setIsWizardOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"general" | "scope" | "pricing" | "timeline" | "terms">("general");
+  const [editingDoc, setEditingDoc] = useState<ProjectDocument | null>(null);
+  const [deletingDoc, setDeletingDoc] = useState<ProjectDocument | null>(null);
+  const [toastMessage, setToastMessage] = useState("");
+  const [activeTab, setActiveTab] = useState<"general" | "client" | "pricing" | "timeline" | "terms">("general");
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(""), 3000);
+  };
 
   // Form State
   const [selectedType, setSelectedType] = useState<ProjectDocumentType>("Quotation");
@@ -337,13 +348,108 @@ export default function QuotationsAndAgreementsPage() {
   };
 
   const handleOpenWizard = (initialType: ProjectDocumentType) => {
+    setEditingDoc(null);
     setSelectedType(initialType);
     loadPreset(initialType === "Quotation" ? "insurance_quotation" : "matrimony_agreement");
+    setActiveTab("general");
     setIsWizardOpen(true);
+  };
+
+  const handleOpenEditWizard = (doc: ProjectDocument) => {
+    setEditingDoc(doc);
+    setSelectedType(doc.type);
+    setSelectedProjectId(doc.projectId || "");
+    setDocTitle(doc.title || "");
+    setSubtitle(doc.subtitle || "");
+    setSlogan(doc.slogan || "");
+    setDocNumber(doc.docNumber || "");
+    setValidUntil(doc.validUntil || "");
+    setEffectiveDate(doc.effectiveDate || "");
+    setClientName(doc.clientName || "");
+    setBusinessName(doc.businessName || "");
+    setClientEmail(doc.clientEmail || "");
+    setClientPhone(doc.clientPhone || "");
+    setClientAddress(doc.clientAddress || "");
+    setEstimatedTimeline(doc.estimatedTimeline || "");
+    setQuotationRange(doc.quotationRange || "");
+    setProposalOverview(doc.proposalOverview || "");
+    setTotalAmount(doc.totalAmount || 10000);
+    setPreparedBy(doc.preparedBy || "TS DEV — Software & Product Development");
+    setAuthorizedSignatory(doc.authorizedSignatory || "");
+    setNotes(doc.notes || "");
+    setScopeSections(doc.scopeSections || []);
+    setPricingBreakdown(doc.pricingBreakdown || []);
+    setDeliveryPlanDays(doc.deliveryPlanDays || []);
+    setTimelinePhases(doc.timelinePhases || []);
+    setPaymentMilestones(doc.paymentMilestones || []);
+    setDeliverablesList(doc.deliverablesList || []);
+    setOutOfScopeTerms(doc.outOfScopeTerms || []);
+    setImportantTerms(doc.importantTerms || []);
+    setTermsAndConditions(doc.termsAndConditions || []);
+    setActiveTab("general");
+    setIsWizardOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deletingDoc) return;
+    deleteDocument(deletingDoc.id);
+    setDeletingDoc(null);
+    showToast("Document deleted successfully.");
   };
 
   const handleCreateDocument = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (editingDoc) {
+      updateDocument(editingDoc.id, {
+        docNumber: docNumber || editingDoc.docNumber,
+        type: selectedType,
+        title: docTitle || (selectedType === "Quotation" ? "Project Quotation" : "Master Service Agreement"),
+        subtitle,
+        slogan,
+        projectId: selectedProjectId || "prj-general",
+        projectName: docTitle || "Software Delivery",
+        clientName: clientName || "Corporate Client",
+        businessName,
+        clientEmail,
+        clientPhone,
+        clientAddress,
+        createdDate: effectiveDate || new Date().toISOString().split("T")[0],
+        validUntil: validUntil || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
+        effectiveDate: effectiveDate || new Date().toISOString().split("T")[0],
+        totalAmount,
+        subtotal: totalAmount,
+        estimatedTimeline,
+        quotationRange,
+        proposalOverview,
+        scopeSections,
+        pricingBreakdown,
+        deliveryPlanDays,
+        timelinePhases,
+        paymentMilestones,
+        deliverablesList,
+        outOfScopeTerms,
+        importantTerms,
+        termsAndConditions,
+        items: pricingBreakdown.map((p, idx) => ({
+          id: `item-${idx}`,
+          description: p.serviceDescription,
+          deliverable: p.deliverablesIncluded || p.serviceDescription,
+          quantity: 1,
+          rate: p.price,
+          amount: p.price,
+        })),
+        paymentTerms: `Payment Schedule: ${paymentMilestones.map((m) => `${m.name}: ₹${m.amount.toLocaleString("en-IN")}`).join(", ")}`,
+        scopeOfWork: docTitle,
+        preparedBy: preparedBy || "TS DEV — Software & Product Development",
+        authorizedSignatory: authorizedSignatory || clientName,
+        notes,
+      });
+      setIsWizardOpen(false);
+      setEditingDoc(null);
+      showToast("Document updated successfully!");
+      return;
+    }
 
     const newDoc: Omit<ProjectDocument, "id"> = {
       docNumber: docNumber || `${selectedType === "Quotation" ? "QUO" : "TSDEV-MAT"}-2026-${Math.floor(100 + Math.random() * 900)}`,
@@ -404,6 +510,7 @@ export default function QuotationsAndAgreementsPage() {
     addDocument(newDoc);
 
     setIsWizardOpen(false);
+    showToast("Document created successfully!");
   };
 
   const filteredDocs = documents.filter((doc) => {
@@ -418,6 +525,14 @@ export default function QuotationsAndAgreementsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-20 right-8 z-50 flex items-center gap-2 rounded-xl bg-[#0F172A] px-4 py-3 text-xs font-semibold text-white shadow-xl animate-in fade-in slide-in-from-top-2">
+          <CheckCircle2 className="h-4 w-4 text-[#16A34A]" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -537,8 +652,14 @@ export default function QuotationsAndAgreementsPage() {
             <tbody className="divide-y divide-[#F1F5F9]">
               {filteredDocs.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-xs text-[#64748B]">
-                    No documents found. Use "Create Quotation" or "Create Agreement" above.
+                  <td colSpan={8} className="py-12 text-center">
+                    <EmptyState
+                      icon={FileText}
+                      title="No documents found"
+                      description="Create a project quotation or service agreement to send to clients."
+                      actionLabel="+ Create Quotation"
+                      onAction={() => handleOpenWizard("Quotation")}
+                    />
                   </td>
                 </tr>
               ) : (
@@ -610,6 +731,22 @@ export default function QuotationsAndAgreementsPage() {
                         </button>
                         <button
                           type="button"
+                          onClick={() => handleOpenEditWizard(doc)}
+                          className="p-1.5 rounded-lg border border-[#E2E8F0] bg-white text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 transition-colors cursor-pointer"
+                          title="Edit Document"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeletingDoc(doc)}
+                          className="p-1.5 rounded-lg border border-red-200 bg-red-50 text-[#DC2626] hover:bg-red-100 transition-colors cursor-pointer"
+                          title="Delete Document"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => {
                             setPreviewDoc(doc);
                             setTimeout(() => window.print(), 300);
@@ -639,310 +776,573 @@ export default function QuotationsAndAgreementsPage() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-4xl rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-2xl my-8 space-y-5"
+            className="w-full max-w-4xl rounded-2xl border border-[#E2E8F0] bg-white shadow-2xl my-8 flex flex-col overflow-hidden"
+            style={{ maxHeight: "90vh" }}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
-              <div>
-                <h3 className="font-bold text-base text-[#0F172A]">
-                  Create {selectedType === "Quotation" ? "Project Quotation" : "Master Service Agreement"}
-                </h3>
-                <p className="text-xs text-[#64748B]">
-                  TS DEV Standard multi-section document builder with live PDF generation.
-                </p>
+            {/* ── Dark Header with Type Switcher ─────────────────── */}
+            <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-slate-900 to-slate-800 text-white shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 border border-white/20">
+                  {selectedType === "Quotation" ? <FileText className="h-5 w-5" /> : <FileSignature className="h-5 w-5" />}
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">
+                    {editingDoc ? `Edit — ${editingDoc.type}` : `Create ${selectedType === "Quotation" ? "Project Quotation" : "Master Service Agreement"}`}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">TS DEV Standard multi-section document builder</p>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsWizardOpen(false)}
-                className="rounded-lg p-1.5 text-[#64748B] hover:bg-[#F8FAFC]"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-3">
+                <div className="flex rounded-lg border border-white/20 overflow-hidden text-[11px] font-bold">
+                  <button type="button" onClick={() => setSelectedType("Quotation")}
+                    className={`px-3 py-1.5 flex items-center gap-1 transition-colors ${selectedType === "Quotation" ? "bg-blue-600 text-white" : "text-slate-300 hover:bg-white/10"}`}>
+                    <FileText className="h-3 w-3" /> Quotation
+                  </button>
+                  <button type="button" onClick={() => setSelectedType("Service Agreement")}
+                    className={`px-3 py-1.5 flex items-center gap-1 transition-colors ${selectedType === "Service Agreement" ? "bg-emerald-600 text-white" : "text-slate-300 hover:bg-white/10"}`}>
+                    <FileSignature className="h-3 w-3" /> Agreement
+                  </button>
+                </div>
+                <button type="button" onClick={() => { setIsWizardOpen(false); setEditingDoc(null); }}
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white transition-colors">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
-            {/* Quick Template Presets */}
-            <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-blue-50/60 border border-blue-100">
-              <span className="text-[11px] font-bold text-[#2563EB] flex items-center gap-1">
-                <Sparkles className="h-3.5 w-3.5" />
-                Template Presets:
+            {/* ── Template Preset Pills ─────────────────────────── */}
+            <div className="flex flex-wrap items-center gap-2 px-6 py-3 bg-blue-50/60 border-b border-blue-100 shrink-0">
+              <span className="text-[10px] font-bold text-[#2563EB] flex items-center gap-1 shrink-0">
+                <Sparkles className="h-3 w-3" /> Quick Load:
               </span>
-              <button
-                type="button"
-                onClick={() => loadPreset("insurance_quotation")}
-                className={clsx(
-                  "px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors shadow-2xs",
-                  selectedType === "Quotation" && docNumber === "QUO-2026-001"
-                    ? "bg-[#2563EB] text-white border-transparent"
-                    : "bg-white border-blue-200 text-[#2563EB] hover:bg-blue-50"
-                )}
-              >
-                Quotation: Vehicle Insurance Platform (₹10,000)
+              <button type="button" onClick={() => loadPreset("insurance_quotation")}
+                className={clsx("flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-semibold transition-all",
+                  docNumber === "QUO-2026-001" ? "bg-blue-600 text-white border-transparent shadow-sm" : "bg-white border-blue-200 text-blue-700 hover:bg-blue-50")}>
+                <FileText className="h-3 w-3" /> Insurance Platform (₹10K)
               </button>
-              <button
-                type="button"
-                onClick={() => loadPreset("matrimony_agreement")}
-                className={clsx(
-                  "px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors shadow-2xs",
-                  selectedType === "Service Agreement"
-                    ? "bg-[#0F172A] text-white border-transparent"
-                    : "bg-white border-slate-300 text-[#0F172A] hover:bg-slate-50"
-                )}
-              >
-                Service Agreement: Matrimony Platform (₹36,999)
+              <button type="button" onClick={() => loadPreset("matrimony_agreement")}
+                className={clsx("flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-semibold transition-all",
+                  docNumber === "TSDEV-MAT-2026-002" ? "bg-slate-800 text-white border-transparent shadow-sm" : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50")}>
+                <FileSignature className="h-3 w-3" /> Matrimony Agreement (₹37K)
               </button>
-              <button
-                type="button"
-                onClick={() => loadPreset("studio_quotation")}
-                className="px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-xs font-semibold text-[#2563EB] hover:bg-blue-50 transition-colors shadow-2xs"
-              >
-                Quotation: Studio Portfolio (₹45,000)
+              <button type="button" onClick={() => loadPreset("studio_quotation")}
+                className={clsx("flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-semibold transition-all",
+                  docNumber === "QUO-2026-043" ? "bg-blue-600 text-white border-transparent shadow-sm" : "bg-white border-blue-200 text-blue-700 hover:bg-blue-50")}>
+                <FileText className="h-3 w-3" /> Studio Portfolio (₹45K)
               </button>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleCreateDocument} className="space-y-4 text-xs">
-              {/* Type Switcher */}
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => handleOpenWizard("Quotation")}
-                  className={clsx(
-                    "flex items-center justify-center gap-2 rounded-xl p-3 border font-bold transition-all",
-                    selectedType === "Quotation"
-                      ? "border-[#2563EB] bg-blue-50/60 text-[#2563EB] ring-2 ring-blue-100"
-                      : "border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8FAFC]"
-                  )}
-                >
-                  <FileText className="h-4 w-4" />
-                  <span>Project Quotation Template</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleOpenWizard("Service Agreement")}
-                  className={clsx(
-                    "flex items-center justify-center gap-2 rounded-xl p-3 border font-bold transition-all",
-                    selectedType === "Service Agreement"
-                      ? "border-[#0F172A] bg-slate-100 text-[#0F172A] ring-2 ring-slate-200"
-                      : "border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8FAFC]"
-                  )}
-                >
-                  <FileSignature className="h-4 w-4" />
-                  <span>Master Service Agreement Template</span>
-                </button>
-              </div>
-
-              {/* General Document Meta */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]">
-                <div>
-                  <label className="font-semibold text-[#0F172A] block mb-1">Document Number *</label>
-                  <input
-                    type="text"
-                    required
-                    value={docNumber}
-                    onChange={(e) => setDocNumber(e.target.value)}
-                    className="w-full rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 font-mono text-xs font-bold text-[#0F172A]"
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold text-[#0F172A] block mb-1">Project / Document Title *</label>
-                  <input
-                    type="text"
-                    required
-                    value={docTitle}
-                    onChange={(e) => setDocTitle(e.target.value)}
-                    className="w-full rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#0F172A]"
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold text-[#0F172A] block mb-1">Subtitle / Proposition</label>
-                  <input
-                    type="text"
-                    value={subtitle}
-                    onChange={(e) => setSubtitle(e.target.value)}
-                    placeholder="e.g. Deposit & Member Management MVP"
-                    className="w-full rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-xs text-[#0F172A]"
-                  />
-                </div>
-              </div>
-
-              {/* Client & Commercial Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-3 rounded-xl bg-white border border-[#E2E8F0]">
-                <div>
-                  <label className="font-semibold text-[#0F172A] block mb-1">Client Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    className="w-full rounded-lg border border-[#E2E8F0] px-2.5 py-1.5 text-xs text-[#0F172A]"
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold text-[#0F172A] block mb-1">Client Phone</label>
-                  <input
-                    type="text"
-                    value={clientPhone}
-                    onChange={(e) => setClientPhone(e.target.value)}
-                    className="w-full rounded-lg border border-[#E2E8F0] px-2.5 py-1.5 text-xs text-[#0F172A]"
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold text-[#0F172A] block mb-1">Estimated Timeline</label>
-                  <input
-                    type="text"
-                    value={estimatedTimeline}
-                    onChange={(e) => setEstimatedTimeline(e.target.value)}
-                    placeholder="e.g. 7 Working Days (1 Week)"
-                    className="w-full rounded-lg border border-[#E2E8F0] px-2.5 py-1.5 text-xs text-[#0F172A]"
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold text-[#0F172A] block mb-1">Total Project Budget (₹)</label>
-                  <input
-                    type="number"
-                    required
-                    value={totalAmount}
-                    onChange={(e) => setTotalAmount(Number(e.target.value))}
-                    className="w-full rounded-lg border border-[#E2E8F0] px-2.5 py-1.5 text-xs font-bold text-[#2563EB]"
-                  />
-                </div>
-              </div>
-
-              {/* Commercial Modules / Cost Breakdown Table */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-[#0F172A]">Module & Commercial Cost Breakdown</label>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPricingBreakdown([
-                        ...pricingBreakdown,
-                        { serviceDescription: "Additional Module", price: 2000 },
-                      ])
-                    }
-                    className="text-xs font-semibold text-[#2563EB] hover:underline flex items-center gap-1"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    <span>Add Module</span>
+            {/* ── Tab Navigation ────────────────────────────────── */}
+            <div className="flex border-b border-[#E2E8F0] bg-white shrink-0 overflow-x-auto">
+              {(["general", "client", "pricing", "timeline", "terms"] as const).map((tab) => {
+                const labels: Record<string, string> = { general: "📄 General", client: "👤 Client", pricing: "💰 Pricing", timeline: "📅 Timeline", terms: "📋 Terms & Notes" };
+                return (
+                  <button key={tab} type="button" onClick={() => setActiveTab(tab)}
+                    className={clsx("px-5 py-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-all",
+                      activeTab === tab ? "border-[#2563EB] text-[#2563EB] bg-blue-50/50" : "border-transparent text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC]")}>
+                    {labels[tab]}
                   </button>
-                </div>
+                );
+              })}
+            </div>
 
-                <div className="border border-[#E2E8F0] rounded-xl overflow-hidden">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-[#0F172A] text-white">
-                      <tr>
-                        <th className="p-2.5 font-bold uppercase tracking-wider text-[10px]">Module / Service</th>
-                        <th className="p-2.5 font-bold uppercase tracking-wider text-[10px]">Deliverables Included</th>
-                        <th className="p-2.5 font-bold uppercase tracking-wider text-[10px] w-28 text-right">Amount (₹)</th>
-                        <th className="p-2.5 w-10"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#F1F5F9]">
-                      {pricingBreakdown.map((module, idx) => (
-                        <tr key={idx}>
-                          <td className="p-2">
-                            <input
-                              type="text"
-                              value={module.serviceDescription}
-                              onChange={(e) => {
-                                const next = [...pricingBreakdown];
-                                next[idx].serviceDescription = e.target.value;
-                                setPricingBreakdown(next);
-                              }}
-                              className="w-full rounded border border-[#E2E8F0] px-2 py-1 text-xs font-semibold"
-                            />
-                          </td>
-                          <td className="p-2">
-                            <input
-                              type="text"
-                              value={module.deliverablesIncluded || ""}
-                              onChange={(e) => {
-                                const next = [...pricingBreakdown];
-                                next[idx].deliverablesIncluded = e.target.value;
-                                setPricingBreakdown(next);
-                              }}
-                              placeholder="e.g. Dynamic Home Page, Registration & Auth"
-                              className="w-full rounded border border-[#E2E8F0] px-2 py-1 text-xs text-[#64748B]"
-                            />
-                          </td>
-                          <td className="p-2">
-                            <input
-                              type="number"
-                              value={module.price}
-                              onChange={(e) => {
-                                const next = [...pricingBreakdown];
-                                next[idx].price = Number(e.target.value);
-                                setPricingBreakdown(next);
-                              }}
-                              className="w-full rounded border border-[#E2E8F0] px-2 py-1 text-xs font-bold text-right text-[#0F172A]"
-                            />
-                          </td>
-                          <td className="p-2 text-center">
-                            <button
-                              type="button"
-                              onClick={() => setPricingBreakdown(pricingBreakdown.filter((_, i) => i !== idx))}
-                              className="text-[#94A3B8] hover:text-red-600"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+            {/* ── Scrollable Tab Content ────────────────────────── */}
+            <form id="doc-wizard-form" onSubmit={handleCreateDocument} className="flex-1 overflow-y-auto">
+              <div className="p-6 space-y-5 text-xs">
 
-              {/* Milestone Payments Table */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-[#0F172A]">Payment Milestones & Schedule</label>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPaymentMilestones([
-                        ...paymentMilestones,
-                        { name: "Progress Milestone", amount: 3000, dueWhen: "Phase Completion" },
-                      ])
-                    }
-                    className="text-xs font-semibold text-[#2563EB] hover:underline flex items-center gap-1"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    <span>Add Milestone</span>
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {paymentMilestones.map((m, idx) => (
-                    <div key={idx} className="p-2.5 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] space-y-1">
-                      <div className="flex justify-between items-center">
-                        <span className="font-semibold text-xs text-[#0F172A]">{m.name}</span>
-                        <span className="font-bold text-xs text-[#2563EB]">₹{m.amount.toLocaleString("en-IN")}</span>
-                      </div>
-                      <div className="text-[11px] text-[#64748B]">Due: {m.dueWhen}</div>
+                {/* TAB: General */}
+                {activeTab === "general" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 pb-1 border-b border-[#F1F5F9]">
+                      <FileText className="h-4 w-4 text-[#2563EB]" />
+                      <span className="font-bold text-xs text-[#0F172A] uppercase tracking-wider">Document Details</span>
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className="font-semibold text-[#0F172A] block mb-1.5">Document Number <span className="text-red-500">*</span></label>
+                        <input type="text" required value={docNumber} onChange={(e) => setDocNumber(e.target.value)}
+                          className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 font-mono font-bold text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="font-semibold text-[#0F172A] block mb-1.5">Project / Document Title <span className="text-red-500">*</span></label>
+                        <input type="text" required value={docTitle} onChange={(e) => setDocTitle(e.target.value)} placeholder="e.g. Vehicle Insurance Platform"
+                          className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 font-semibold text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="font-semibold text-[#0F172A] block mb-1.5">Subtitle / Proposition</label>
+                        <input type="text" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="e.g. MVP Development Proposal"
+                          className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                      </div>
+                      <div>
+                        <label className="font-semibold text-[#0F172A] block mb-1.5">Slogan / Tagline</label>
+                        <input type="text" value={slogan} onChange={(e) => setSlogan(e.target.value)} placeholder="e.g. Connect • Discover • Trust"
+                          className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className="font-semibold text-[#0F172A] block mb-1.5">Effective / Start Date</label>
+                        <input type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)}
+                          className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                      </div>
+                      <div>
+                        <label className="font-semibold text-[#0F172A] block mb-1.5">Valid Until</label>
+                        <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)}
+                          className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                      </div>
+                      <div>
+                        <label className="font-semibold text-[#0F172A] block mb-1.5">Estimated Timeline</label>
+                        <input type="text" value={estimatedTimeline} onChange={(e) => setEstimatedTimeline(e.target.value)} placeholder="e.g. 7 Working Days"
+                          className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="font-semibold text-[#0F172A] block mb-1.5">Prepared By</label>
+                        <input type="text" value={preparedBy} onChange={(e) => setPreparedBy(e.target.value)}
+                          className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                      </div>
+                      <div>
+                        <label className="font-semibold text-[#0F172A] block mb-1.5">Authorized Signatory</label>
+                        <input type="text" value={authorizedSignatory} onChange={(e) => setAuthorizedSignatory(e.target.value)} placeholder="e.g. Client Representative"
+                          className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                      </div>
+                    </div>
+                    {selectedType === "Service Agreement" && (
+                      <div>
+                        <label className="font-semibold text-[#0F172A] block mb-1.5">Proposal Overview</label>
+                        <textarea rows={4} value={proposalOverview} onChange={(e) => setProposalOverview(e.target.value)}
+                          placeholder="Describe the overall project and what will be delivered..."
+                          className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white resize-none" />
+                      </div>
+                    )}
+                  </div>
+                )}
 
-              {/* Actions */}
-              <div className="flex items-center justify-end gap-2 border-t border-[#E2E8F0] pt-3 mt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsWizardOpen(false)}
-                  className="rounded-xl border border-[#E2E8F0] px-4 py-2 font-semibold text-[#64748B] hover:bg-[#F8FAFC]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex items-center gap-1.5 rounded-xl bg-[#2563EB] px-5 py-2 font-semibold text-white hover:bg-blue-700 shadow-xs transition-colors cursor-pointer"
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>Generate Document & Live PDF</span>
-                </button>
+                {/* TAB: Client */}
+                {activeTab === "client" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 pb-1 border-b border-[#F1F5F9]">
+                      <User className="h-4 w-4 text-[#2563EB]" />
+                      <span className="font-bold text-xs text-[#0F172A] uppercase tracking-wider">Client Information</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="font-semibold text-[#0F172A] block mb-1.5">Client Name <span className="text-red-500">*</span></label>
+                        <input type="text" required value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="e.g. Apex Logistics & Services"
+                          className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 font-semibold text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                      </div>
+                      <div>
+                        <label className="font-semibold text-[#0F172A] block mb-1.5">Business / Brand Name</label>
+                        <input type="text" value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="e.g. Vehicle Insurance Portal"
+                          className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="font-semibold text-[#0F172A] block mb-1.5">Phone Number</label>
+                        <input type="text" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="+91 98765 43210"
+                          className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                      </div>
+                      <div>
+                        <label className="font-semibold text-[#0F172A] block mb-1.5">Email Address</label>
+                        <input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="client@example.in"
+                          className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="font-semibold text-[#0F172A] block mb-1.5">Address / Location</label>
+                      <input type="text" value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} placeholder="e.g. Coimbatore, Tamil Nadu, India"
+                        className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                    </div>
+                    <div>
+                      <label className="font-semibold text-[#0F172A] block mb-1.5">Link to Project (optional)</label>
+                      <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)}
+                        className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white">
+                        <option value="">— No linked project —</option>
+                        {projects.map((p) => <option key={p.id} value={p.id}>{p.projectName} ({p.clientName})</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB: Pricing */}
+                {activeTab === "pricing" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-1 border-b border-[#F1F5F9]">
+                      <div className="flex items-center gap-2">
+                        <IndianRupee className="h-4 w-4 text-[#2563EB]" />
+                        <span className="font-bold text-xs text-[#0F172A] uppercase tracking-wider">Module & Cost Breakdown</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-[#64748B]">Total (₹):</span>
+                          <input type="number" required value={totalAmount} onChange={(e) => setTotalAmount(Number(e.target.value))}
+                            className="w-24 rounded-lg border border-[#2563EB] px-2 py-1 text-xs font-bold text-[#2563EB] text-right focus:outline-hidden" />
+                        </div>
+                        <button type="button" onClick={() => setPricingBreakdown([...pricingBreakdown, { serviceDescription: "New Module", price: 2000 }])}
+                          className="flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-[11px] font-semibold text-[#2563EB] hover:bg-blue-100 transition-colors">
+                          <Plus className="h-3.5 w-3.5" /> Add Module
+                        </button>
+                      </div>
+                    </div>
+                    <div className="border border-[#E2E8F0] rounded-xl overflow-hidden">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-[#0F172A] text-white">
+                          <tr>
+                            <th className="p-3 font-bold uppercase tracking-wider text-[10px] w-5/12">Module / Service</th>
+                            <th className="p-3 font-bold uppercase tracking-wider text-[10px]">Deliverables Included</th>
+                            <th className="p-3 font-bold uppercase tracking-wider text-[10px] w-28 text-right">Amount (₹)</th>
+                            <th className="p-3 w-10"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#F1F5F9]">
+                          {pricingBreakdown.length === 0 && (
+                            <tr><td colSpan={4} className="py-8 text-center text-[#94A3B8] text-xs">No modules yet. Click "Add Module" to start.</td></tr>
+                          )}
+                          {pricingBreakdown.map((module, idx) => (
+                            <tr key={idx} className="hover:bg-[#F8FAFC]">
+                              <td className="p-2">
+                                <input type="text" value={module.serviceDescription}
+                                  onChange={(e) => { const next = [...pricingBreakdown]; next[idx].serviceDescription = e.target.value; setPricingBreakdown(next); }}
+                                  className="w-full rounded-lg border border-[#E2E8F0] bg-white px-2 py-1.5 text-xs font-semibold focus:outline-hidden focus:border-[#2563EB]" />
+                              </td>
+                              <td className="p-2">
+                                <input type="text" value={module.deliverablesIncluded || ""}
+                                  onChange={(e) => { const next = [...pricingBreakdown]; next[idx].deliverablesIncluded = e.target.value; setPricingBreakdown(next); }}
+                                  placeholder="What's included..."
+                                  className="w-full rounded-lg border border-[#E2E8F0] bg-white px-2 py-1.5 text-xs text-[#64748B] focus:outline-hidden focus:border-[#2563EB]" />
+                              </td>
+                              <td className="p-2">
+                                <input type="number" value={module.price}
+                                  onChange={(e) => { const next = [...pricingBreakdown]; next[idx].price = Number(e.target.value); setPricingBreakdown(next); }}
+                                  className="w-full rounded-lg border border-[#E2E8F0] bg-white px-2 py-1.5 text-xs font-bold text-right text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]" />
+                              </td>
+                              <td className="p-2 text-center">
+                                <button type="button" onClick={() => setPricingBreakdown(pricingBreakdown.filter((_, i) => i !== idx))}
+                                  className="text-[#94A3B8] hover:text-red-600 transition-colors p-0.5 rounded">
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                          {pricingBreakdown.length > 0 && (
+                            <tr className="bg-[#F8FAFC] border-t-2 border-[#E2E8F0]">
+                              <td colSpan={2} className="p-3 font-bold text-[#0F172A] text-right pr-4">Computed Total</td>
+                              <td className="p-3 font-black text-sm text-[#0F172A] text-right">₹{pricingBreakdown.reduce((s, m) => s + m.price, 0).toLocaleString("en-IN")}</td>
+                              <td></td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    {/* Payment Milestones */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-[#0F172A]">Payment Milestones & Schedule</label>
+                        <button type="button" onClick={() => setPaymentMilestones([...paymentMilestones, { name: "Progress Milestone", amount: 3000, dueWhen: "Phase Completion" }])}
+                          className="flex items-center gap-1 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors">
+                          <Plus className="h-3.5 w-3.5" /> Add Milestone
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {paymentMilestones.map((m, idx) => (
+                          <div key={idx} className="p-3 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] space-y-2">
+                            <div className="flex justify-between items-start gap-1">
+                              <input type="text" value={m.name} onChange={(e) => { const next = [...paymentMilestones]; next[idx].name = e.target.value; setPaymentMilestones(next); }}
+                                className="flex-1 rounded-lg border border-[#E2E8F0] bg-white px-2 py-1 text-[11px] font-semibold text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]" />
+                              <button type="button" onClick={() => setPaymentMilestones(paymentMilestones.filter((_, i) => i !== idx))}
+                                className="text-[#94A3B8] hover:text-red-500 p-0.5 shrink-0"><X className="h-3.5 w-3.5" /></button>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[#64748B] shrink-0">₹</span>
+                              <input type="number" value={m.amount} onChange={(e) => { const next = [...paymentMilestones]; next[idx].amount = Number(e.target.value); setPaymentMilestones(next); }}
+                                className="flex-1 rounded-lg border border-[#E2E8F0] bg-white px-2 py-1 text-[11px] font-bold text-[#2563EB] focus:outline-hidden focus:border-[#2563EB]" />
+                            </div>
+                            <input type="text" value={m.dueWhen} onChange={(e) => { const next = [...paymentMilestones]; next[idx].dueWhen = e.target.value; setPaymentMilestones(next); }}
+                              placeholder="Due when..."
+                              className="w-full rounded-lg border border-[#E2E8F0] bg-white px-2 py-1 text-[11px] text-[#64748B] focus:outline-hidden focus:border-[#2563EB]" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {selectedType === "Quotation" && (
+                      <div>
+                        <label className="font-semibold text-[#0F172A] block mb-1.5">Quotation Range (optional)</label>
+                        <input type="text" value={quotationRange} onChange={(e) => setQuotationRange(e.target.value)}
+                          placeholder="e.g. ₹8,000 – ₹10,000 (final depends on confirmed scope)"
+                          className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TAB: Timeline */}
+                {activeTab === "timeline" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 pb-1 border-b border-[#F1F5F9]">
+                      <Calendar className="h-4 w-4 text-[#2563EB]" />
+                      <span className="font-bold text-xs text-[#0F172A] uppercase tracking-wider">Delivery Plan & Scope</span>
+                    </div>
+                    {/* Scope Sections */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-[#0F172A]">Scope Sections</label>
+                        <button type="button" onClick={() => setScopeSections([...scopeSections, { title: "NEW SECTION", points: ["Point 1"] }])}
+                          className="flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-[11px] font-semibold text-[#2563EB] hover:bg-blue-100 transition-colors">
+                          <Plus className="h-3.5 w-3.5" /> Add Section
+                        </button>
+                      </div>
+                      <div className="space-y-3">
+                        {scopeSections.map((sec, si) => (
+                          <div key={si} className="rounded-xl border border-[#E2E8F0] p-3 space-y-2 bg-[#F8FAFC]">
+                            <div className="flex items-center gap-2">
+                              <input type="text" value={sec.title} onChange={(e) => { const next = [...scopeSections]; next[si].title = e.target.value; setScopeSections(next); }}
+                                className="flex-1 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-xs font-bold text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]" />
+                              <button type="button" onClick={() => setScopeSections(scopeSections.filter((_, i) => i !== si))}
+                                className="text-[#94A3B8] hover:text-red-500 p-0.5"><X className="h-3.5 w-3.5" /></button>
+                            </div>
+                            <div className="space-y-1 pl-2">
+                              {sec.points.map((pt, pi) => (
+                                <div key={pi} className="flex items-start gap-1.5">
+                                  <span className="text-[#2563EB] mt-1.5 shrink-0">•</span>
+                                  <input type="text" value={pt} onChange={(e) => { const next = [...scopeSections]; next[si].points[pi] = e.target.value; setScopeSections(next); }}
+                                    className="flex-1 rounded border border-[#E2E8F0] bg-white px-2 py-1 text-[11px] text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]" />
+                                  <button type="button" onClick={() => { const next = [...scopeSections]; next[si].points = next[si].points.filter((_, i) => i !== pi); setScopeSections(next); }}
+                                    className="text-[#94A3B8] hover:text-red-500 p-0.5 mt-0.5"><X className="h-3 w-3" /></button>
+                                </div>
+                              ))}
+                              <button type="button" onClick={() => { const next = [...scopeSections]; next[si].points.push(""); setScopeSections(next); }}
+                                className="text-[11px] text-[#2563EB] hover:underline flex items-center gap-0.5 mt-1">
+                                <Plus className="h-3 w-3" /> Add Point
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Delivery Plan Days (for Quotation) */}
+                    {selectedType === "Quotation" && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="font-bold text-[#0F172A]">Day-by-Day Delivery Plan</label>
+                          <button type="button" onClick={() => setDeliveryPlanDays([...deliveryPlanDays, { day: `Day ${deliveryPlanDays.length + 1}`, work: "" }])}
+                            className="flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-[11px] font-semibold text-[#2563EB] hover:bg-blue-100 transition-colors">
+                            <Plus className="h-3.5 w-3.5" /> Add Day
+                          </button>
+                        </div>
+                        <div className="border border-[#E2E8F0] rounded-xl overflow-hidden">
+                          <table className="w-full text-xs">
+                            <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
+                              <tr>
+                                <th className="p-2.5 text-left font-semibold text-[#64748B] w-24">Day</th>
+                                <th className="p-2.5 text-left font-semibold text-[#64748B]">Work / Deliverable</th>
+                                <th className="p-2.5 w-10"></th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#F1F5F9]">
+                              {deliveryPlanDays.map((d, idx) => (
+                                <tr key={idx}>
+                                  <td className="p-2">
+                                    <input type="text" value={d.day} onChange={(e) => { const next = [...deliveryPlanDays]; next[idx].day = e.target.value; setDeliveryPlanDays(next); }}
+                                      className="w-full rounded border border-[#E2E8F0] px-2 py-1 text-xs font-bold text-[#0F172A] focus:outline-hidden" />
+                                  </td>
+                                  <td className="p-2">
+                                    <input type="text" value={d.work} onChange={(e) => { const next = [...deliveryPlanDays]; next[idx].work = e.target.value; setDeliveryPlanDays(next); }}
+                                      className="w-full rounded border border-[#E2E8F0] px-2 py-1 text-xs text-[#0F172A] focus:outline-hidden" />
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    <button type="button" onClick={() => setDeliveryPlanDays(deliveryPlanDays.filter((_, i) => i !== idx))}
+                                      className="text-[#94A3B8] hover:text-red-500"><X className="h-3.5 w-3.5" /></button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    {/* Timeline Phases (for Agreement) */}
+                    {selectedType === "Service Agreement" && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="font-bold text-[#0F172A]">Project Timeline Phases</label>
+                          <button type="button" onClick={() => setTimelinePhases([...timelinePhases, { phase: "New Phase", timeline: "Week X" }])}
+                            className="flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-[11px] font-semibold text-[#2563EB] hover:bg-blue-100 transition-colors">
+                            <Plus className="h-3.5 w-3.5" /> Add Phase
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          {timelinePhases.map((ph, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <input type="text" value={ph.phase} onChange={(e) => { const next = [...timelinePhases]; next[idx].phase = e.target.value; setTimelinePhases(next); }}
+                                className="flex-1 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs font-semibold text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                              <input type="text" value={ph.timeline} onChange={(e) => { const next = [...timelinePhases]; next[idx].timeline = e.target.value; setTimelinePhases(next); }}
+                                className="w-32 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#64748B] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" placeholder="Week X" />
+                              <button type="button" onClick={() => setTimelinePhases(timelinePhases.filter((_, i) => i !== idx))}
+                                className="text-[#94A3B8] hover:text-red-500 p-1"><X className="h-4 w-4" /></button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* Deliverables */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-[#0F172A]">Final Deliverables List</label>
+                        <button type="button" onClick={() => setDeliverablesList([...deliverablesList, ""])}
+                          className="flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-[11px] font-semibold text-[#2563EB] hover:bg-blue-100 transition-colors">
+                          <Plus className="h-3.5 w-3.5" /> Add
+                        </button>
+                      </div>
+                      <div className="space-y-1.5">
+                        {deliverablesList.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                            <input type="text" value={item} onChange={(e) => { const next = [...deliverablesList]; next[idx] = e.target.value; setDeliverablesList(next); }}
+                              className="flex-1 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-2.5 py-1.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                            <button type="button" onClick={() => setDeliverablesList(deliverablesList.filter((_, i) => i !== idx))}
+                              className="text-[#94A3B8] hover:text-red-500 p-0.5"><X className="h-3.5 w-3.5" /></button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB: Terms & Notes */}
+                {activeTab === "terms" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 pb-1 border-b border-[#F1F5F9]">
+                      <ShieldCheck className="h-4 w-4 text-[#2563EB]" />
+                      <span className="font-bold text-xs text-[#0F172A] uppercase tracking-wider">Terms, Conditions & Notes</span>
+                    </div>
+                    {/* Out of Scope */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-[#0F172A]">Out of Scope Clarifications</label>
+                        <button type="button" onClick={() => setOutOfScopeTerms([...outOfScopeTerms, ""])}
+                          className="flex items-center gap-1 rounded-lg bg-orange-50 border border-orange-200 px-2.5 py-1 text-[11px] font-semibold text-orange-700 hover:bg-orange-100 transition-colors">
+                          <Plus className="h-3.5 w-3.5" /> Add
+                        </button>
+                      </div>
+                      <div className="space-y-1.5">
+                        {outOfScopeTerms.map((item, idx) => (
+                          <div key={idx} className="flex items-start gap-2">
+                            <span className="text-orange-400 mt-1.5 shrink-0 text-base font-bold">×</span>
+                            <textarea rows={2} value={item} onChange={(e) => { const next = [...outOfScopeTerms]; next[idx] = e.target.value; setOutOfScopeTerms(next); }}
+                              className="flex-1 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-2.5 py-1.5 text-[11px] text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white resize-none" />
+                            <button type="button" onClick={() => setOutOfScopeTerms(outOfScopeTerms.filter((_, i) => i !== idx))}
+                              className="text-[#94A3B8] hover:text-red-500 p-0.5 mt-0.5 shrink-0"><X className="h-3.5 w-3.5" /></button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Important Terms */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-[#0F172A]">Important Terms</label>
+                        <button type="button" onClick={() => setImportantTerms([...importantTerms, ""])}
+                          className="flex items-center gap-1 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-100 transition-colors">
+                          <Plus className="h-3.5 w-3.5" /> Add
+                        </button>
+                      </div>
+                      <div className="space-y-1.5">
+                        {importantTerms.map((item, idx) => (
+                          <div key={idx} className="flex items-start gap-2">
+                            <span className="text-amber-500 mt-1 shrink-0">⚡</span>
+                            <input type="text" value={item} onChange={(e) => { const next = [...importantTerms]; next[idx] = e.target.value; setImportantTerms(next); }}
+                              className="flex-1 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-2.5 py-1.5 text-[11px] text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white" />
+                            <button type="button" onClick={() => setImportantTerms(importantTerms.filter((_, i) => i !== idx))}
+                              className="text-[#94A3B8] hover:text-red-500 p-0.5 shrink-0"><X className="h-3.5 w-3.5" /></button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* T&C */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-[#0F172A]">Terms & Conditions</label>
+                        <button type="button" onClick={() => setTermsAndConditions([...termsAndConditions, ""])}
+                          className="flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-[11px] font-semibold text-[#2563EB] hover:bg-blue-100 transition-colors">
+                          <Plus className="h-3.5 w-3.5" /> Add
+                        </button>
+                      </div>
+                      <div className="space-y-1.5">
+                        {termsAndConditions.map((item, idx) => (
+                          <div key={idx} className="flex items-start gap-2">
+                            <span className="font-bold text-[#2563EB] mt-1 shrink-0">{idx + 1}.</span>
+                            <textarea rows={2} value={item} onChange={(e) => { const next = [...termsAndConditions]; next[idx] = e.target.value; setTermsAndConditions(next); }}
+                              className="flex-1 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-2.5 py-1.5 text-[11px] text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white resize-none" />
+                            <button type="button" onClick={() => setTermsAndConditions(termsAndConditions.filter((_, i) => i !== idx))}
+                              className="text-[#94A3B8] hover:text-red-500 p-0.5 mt-0.5 shrink-0"><X className="h-3.5 w-3.5" /></button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Notes */}
+                    <div>
+                      <label className="font-semibold text-[#0F172A] block mb-1.5">Closing Note / Thank You Message</label>
+                      <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)}
+                        placeholder="e.g. Thank you for choosing TS DEV. We look forward to building this with you."
+                        className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB] focus:bg-white resize-none" />
+                    </div>
+                  </div>
+                )}
+
               </div>
             </form>
+
+            {/* ── Persistent Footer / Actions ──────────────────────── */}
+            <div className="border-t border-[#E2E8F0] bg-[#F8FAFC] px-6 py-4 flex items-center justify-between gap-4 shrink-0">
+              {/* Running Total */}
+              <div className="flex items-center gap-4 text-xs">
+                <div className="text-[#64748B]">
+                  <span className="font-semibold">Type:</span>{" "}
+                  <span className={clsx("font-bold px-2 py-0.5 rounded-full border text-[10px]", selectedType === "Quotation" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-emerald-50 text-emerald-700 border-emerald-200")}>
+                    {selectedType}
+                  </span>
+                </div>
+                <div className="text-[#64748B]">
+                  <span className="font-semibold">Total:</span>{" "}
+                  <span className="font-black text-[#0F172A] text-sm">₹{totalAmount.toLocaleString("en-IN")}</span>
+                </div>
+                {docTitle && <div className="text-[#64748B] truncate max-w-[200px] hidden sm:block"><span className="font-semibold">Doc:</span> {docTitle}</div>}
+              </div>
+              {/* Tab Navigation + Submit */}
+              <div className="flex items-center gap-2">
+                {activeTab !== "general" && (
+                  <button type="button" onClick={() => {
+                    const tabs = ["general", "client", "pricing", "timeline", "terms"] as const;
+                    const currentIdx = tabs.findIndex(t => t === activeTab);
+                    if (currentIdx > 0) setActiveTab(tabs[currentIdx - 1]);
+                  }} className="rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-2 text-xs font-semibold text-[#64748B] hover:bg-slate-50 transition-colors">
+                    ← Back
+                  </button>
+                )}
+                {activeTab !== "terms" ? (
+                  <button type="button" onClick={() => {
+                    const tabs = ["general", "client", "pricing", "timeline", "terms"] as const;
+                    const currentIdx = tabs.findIndex(t => t === activeTab);
+                    if (currentIdx < tabs.length - 1) setActiveTab(tabs[currentIdx + 1]);
+                  }} className="flex items-center gap-1.5 rounded-xl bg-[#2563EB] px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 shadow-sm transition-colors cursor-pointer">
+                    Next <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                ) : (
+                  <button type="submit" form="doc-wizard-form"
+                    className="flex items-center gap-1.5 rounded-xl bg-[#16A34A] px-5 py-2 text-xs font-bold text-white hover:bg-emerald-700 shadow-sm transition-colors cursor-pointer">
+                    <CheckCircle2 className="h-4 w-4" />
+                    {editingDoc ? "Save Changes" : "Generate Document & PDF"}
+                  </button>
+                )}
+                <button type="button" onClick={() => { setIsWizardOpen(false); setEditingDoc(null); }}
+                  className="rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-semibold text-[#64748B] hover:bg-slate-50 transition-colors cursor-pointer">
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -996,8 +1396,8 @@ export default function QuotationsAndAgreementsPage() {
                 {/* Header with Dark Navy Top Banner */}
                 <div className="flex items-center justify-between bg-[#0F172A] text-white p-4 rounded-xl -mx-4 sm:-mx-6 -mt-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#2563EB] font-black text-base text-white">
-                      TS
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 overflow-hidden border border-slate-700/60 shrink-0 p-1">
+                      <img src="/logo-removebg.png" alt="TS DEV Logo" className="h-full w-full object-contain filter drop-shadow-[0_0_8px_rgba(37,99,235,0.4)]" />
                     </div>
                     <div>
                       <div className="font-black tracking-wider text-sm">TS DEV</div>
@@ -1225,9 +1625,14 @@ export default function QuotationsAndAgreementsPage() {
                     <span className="text-[#64748B] block text-[11px]">Prepared By</span>
                     <span className="font-bold text-[#0F172A]">{previewDoc.preparedBy}</span>
                   </div>
-                  <div className="text-right">
-                    <span className="font-bold text-[#2563EB] block">Thank you for choosing TS DEV.</span>
-                    <span className="text-[#64748B] text-[11px]">We look forward to building this with you.</span>
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-lg bg-slate-950 p-1 border border-slate-800 flex items-center justify-center">
+                      <img src="/logo-removebg.png" alt="TS DEV Seal" className="h-full w-full object-contain" />
+                    </div>
+                    <div className="text-right">
+                      <span className="font-bold text-[#2563EB] block">Thank you for choosing TS DEV.</span>
+                      <span className="text-[#64748B] text-[11px]">We look forward to building this with you.</span>
+                    </div>
                   </div>
                 </div>
 
@@ -1245,8 +1650,13 @@ export default function QuotationsAndAgreementsPage() {
               /* =================================================================== */
               <div className="border border-slate-200 rounded-xl p-8 sm:p-12 space-y-9 text-[#0F172A] bg-white print:border-none print:p-0 print:shadow-none shadow-xs max-w-3xl mx-auto text-xs leading-relaxed">
                 {/* Document Top Bar */}
-                <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-3 text-[10px] font-bold uppercase tracking-wider text-[#64748B]">
-                  <span>TS DEV • SOFTWARE & PRODUCT DEVELOPMENT</span>
+                <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-4 text-[10px] font-bold uppercase tracking-wider text-[#64748B]">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-9 w-9 rounded-xl bg-slate-950 overflow-hidden border border-slate-800 p-1 shrink-0 flex items-center justify-center">
+                      <img src="/logo-removebg.png" alt="TS DEV Logo" className="h-full w-full object-contain filter drop-shadow-[0_0_8px_rgba(37,99,235,0.4)]" />
+                    </div>
+                    <span className="font-bold text-[#0F172A]">TS DEV • SOFTWARE & PRODUCT DEVELOPMENT</span>
+                  </div>
                   <span>SERVICE AGREEMENT & PROJECT PROPOSAL</span>
                 </div>
 
@@ -1652,6 +2062,27 @@ export default function QuotationsAndAgreementsPage() {
                   </div>
                 </div>
 
+                {/* Formal Signatures and Acceptance Block */}
+                <div className="pt-6 border-t border-[#E2E8F0] grid grid-cols-2 gap-8 text-xs">
+                  <div className="space-y-3">
+                    <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">For Service Provider</div>
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-10 w-10 rounded-xl bg-slate-950 p-1 border border-slate-800 flex items-center justify-center shrink-0">
+                        <img src="/logo-removebg.png" alt="TS DEV Seal" className="h-full w-full object-contain" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-[#0F172A] text-xs">TS DEV Authorized Signatory</div>
+                        <div className="text-[10px] text-[#64748B]">Software & Product Development</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-3 text-right">
+                    <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">For Client Acceptance</div>
+                    <div className="font-bold text-[#0F172A] text-xs">{previewDoc.clientName}</div>
+                    <div className="text-[10px] text-[#64748B]">Authorized Acceptance & Signature</div>
+                  </div>
+                </div>
+
                 {/* Running Footer Bar */}
                 <div className="pt-6 border-t border-[#E2E8F0] flex justify-between items-center text-[10px] text-[#94A3B8] font-medium">
                   <span>CONFIDENTIAL • TS DEV</span>
@@ -1663,6 +2094,17 @@ export default function QuotationsAndAgreementsPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Document Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!deletingDoc}
+        title="Delete Document"
+        message={`Are you sure you want to permanently delete document "${deletingDoc?.docNumber}" (${deletingDoc?.title}) for ${deletingDoc?.clientName}?`}
+        confirmLabel="Delete Document"
+        variant="danger"
+        onConfirm={handleDeleteConfirm}
+        onClose={() => setDeletingDoc(null)}
+      />
     </div>
   );
 }

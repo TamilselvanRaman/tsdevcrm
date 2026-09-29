@@ -19,21 +19,91 @@ import {
   CheckCircle2,
   Share2,
   FolderPlus,
+  Edit2,
+  Trash2,
+  X,
+  Check,
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { EnquiryStatus, EnquiryPriority } from "@/types";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 export default function EnquiryDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const enquiryId = params?.id as string;
-  const { enquiries, updateEnquiryStatus, assignEnquiry, addEnquiryNote, users, addProject, currentUserId } = useAppStore();
+  const {
+    enquiries,
+    updateEnquiryStatus,
+    assignEnquiry,
+    addEnquiryNote,
+    users,
+    addProject,
+    currentUserId,
+    updateEnquiry,
+    deleteEnquiry,
+  } = useAppStore();
   const currentUser = users.find((u) => u.id === currentUserId) || users[0];
 
   const [activeTab, setActiveTab] = useState<"Overview" | "Activity" | "Notes" | "Files">("Overview");
   const [noteInput, setNoteInput] = useState("");
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Form State for editing
   const enquiry = enquiries.find((e) => e.id === enquiryId) || enquiries[0];
+
+  const [editClientName, setEditClientName] = useState(enquiry?.clientName || "");
+  const [editCompany, setEditCompany] = useState(enquiry?.company || "");
+  const [editEmail, setEditEmail] = useState(enquiry?.email || "");
+  const [editPhone, setEditPhone] = useState(enquiry?.phone || "");
+  const [editLocation, setEditLocation] = useState(enquiry?.location || "");
+  const [editRequirement, setEditRequirement] = useState(enquiry?.requirement || "");
+  const [editEstimatedBudget, setEditEstimatedBudget] = useState(enquiry?.estimatedBudget || 50000);
+  const [editPriority, setEditPriority] = useState<EnquiryPriority>(enquiry?.priority || "Medium");
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleOpenEdit = () => {
+    if (!enquiry) return;
+    setEditClientName(enquiry.clientName);
+    setEditCompany(enquiry.company);
+    setEditEmail(enquiry.email);
+    setEditPhone(enquiry.phone);
+    setEditLocation(enquiry.location);
+    setEditRequirement(enquiry.requirement);
+    setEditEstimatedBudget(enquiry.estimatedBudget);
+    setEditPriority(enquiry.priority);
+    setIsEditOpen(true);
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!enquiry) return;
+    updateEnquiry(enquiry.id, {
+      clientName: editClientName,
+      company: editCompany,
+      email: editEmail,
+      phone: editPhone,
+      location: editLocation,
+      requirement: editRequirement,
+      estimatedBudget: Number(editEstimatedBudget),
+      priority: editPriority,
+    });
+    setIsEditOpen(false);
+    showToast("Enquiry updated successfully.");
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!enquiry) return;
+    deleteEnquiry(enquiry.id);
+    setIsDeleteOpen(false);
+    router.replace("/crm/admin/enquiries");
+  };
 
   if (!enquiry) {
     return (
@@ -70,7 +140,12 @@ export default function EnquiryDetailsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Back Button & Top Action Bar */}
+      {/* Toast */}
+      {toastMessage && (
+        <div className="fixed top-20 right-6 z-50 flex items-center gap-2 rounded-xl bg-[#0F172A] text-white px-4 py-3 font-semibold shadow-lg text-xs animate-in fade-in slide-in-from-top-2">
+          <CheckCircle2 className="h-4 w-4 text-[#16A34A]" /> {toastMessage}
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link
@@ -100,6 +175,20 @@ export default function EnquiryDetailsPage() {
           >
             <FolderPlus className="h-4 w-4" />
             <span>Create Project</span>
+          </button>
+          <button
+            onClick={handleOpenEdit}
+            className="flex items-center gap-1.5 rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-semibold text-[#0F172A] hover:bg-[#F8FAFC] transition-colors shadow-2xs"
+          >
+            <Edit2 className="h-3.5 w-3.5 text-[#2563EB]" />
+            <span>Edit</span>
+          </button>
+          <button
+            onClick={() => setIsDeleteOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors shadow-2xs"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>Delete</span>
           </button>
         </div>
       </div>
@@ -364,6 +453,166 @@ export default function EnquiryDetailsPage() {
           </div>
         </div>
       </div>
+
+      {/* Edit Enquiry Modal */}
+      {isEditOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-2xs p-4 animate-in fade-in">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-[#E2E8F0] overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] px-6 py-4 bg-[#F8FAFC]">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-blue-50 text-[#2563EB]">
+                  <Edit2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-[#0F172A]">Edit Enquiry</h3>
+                  <p className="text-xs text-[#64748B]">Update client requirements and budget</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsEditOpen(false)}
+                className="p-1 rounded-lg text-[#64748B] hover:bg-[#E2E8F0] transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="p-6 space-y-4 text-xs overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">
+                    Client Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editClientName}
+                    onChange={(e) => setEditClientName(e.target.value)}
+                    className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">
+                    Company *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editCompany}
+                    onChange={(e) => setEditCompany(e.target.value)}
+                    className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">
+                    Phone
+                  </label>
+                  <input
+                    type="text"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">
+                  Location
+                </label>
+                <input
+                  type="text"
+                  value={editLocation}
+                  onChange={(e) => setEditLocation(e.target.value)}
+                  className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">
+                  Requirement
+                </label>
+                <textarea
+                  rows={2}
+                  value={editRequirement}
+                  onChange={(e) => setEditRequirement(e.target.value)}
+                  className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">
+                    Estimated Budget (₹)
+                  </label>
+                  <input
+                    type="number"
+                    value={editEstimatedBudget}
+                    onChange={(e) => setEditEstimatedBudget(Number(e.target.value))}
+                    className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">
+                    Priority
+                  </label>
+                  <select
+                    value={editPriority}
+                    onChange={(e) => setEditPriority(e.target.value as EnquiryPriority)}
+                    className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Urgent">Urgent</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-[#E2E8F0]">
+                <button
+                  type="button"
+                  onClick={() => setIsEditOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-[#E2E8F0] bg-white text-xs font-semibold text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex items-center gap-2 rounded-xl bg-[#2563EB] px-5 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-[#1D4ED8] transition-colors"
+                >
+                  <Check className="h-4 w-4" />
+                  <span>Update Enquiry</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog
+        isOpen={isDeleteOpen}
+        title="Delete Enquiry"
+        description={`Are you sure you want to permanently delete enquiry for "${enquiry.clientName}"? This action cannot be undone.`}
+        confirmText="Delete Enquiry"
+        variant="danger"
+        onConfirm={handleDeleteConfirm}
+        onClose={() => setIsDeleteOpen(false)}
+      />
     </div>
   );
 }

@@ -28,9 +28,16 @@ import {
   Building2,
   IndianRupee,
   Layers,
+  Edit2,
+  Trash2,
+  Users,
+  CalendarCheck,
+  ArrowRight,
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
-import { EnquiryStatus, EnquiryPriority } from "@/types";
+import { EnquiryStatus, EnquiryPriority, Enquiry } from "@/types";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { clsx } from "clsx";
 
 const STATUS_CONFIG: Record<
@@ -194,10 +201,14 @@ export default function EnquiryListPage() {
   const {
     enquiries,
     addEnquiry,
+    updateEnquiry,
+    deleteEnquiry,
     updateEnquiryStatus,
     assignEnquiry,
     addEnquiryNote,
     addProject,
+    addFollowUp,
+    addClient,
     users,
     currentUserId,
   } = useAppStore();
@@ -209,12 +220,91 @@ export default function EnquiryListPage() {
   const [priorityFilter, setPriorityFilter] = useState<string>("All");
   const [assignedFilter, setAssignedFilter] = useState<string>("All");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingEnquiry, setEditingEnquiry] = useState<Enquiry | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Enquiry | null>(null);
   const [selectedEnquiryId, setSelectedEnquiryId] = useState<string | null>(null);
   const [activeDropdownEnquiryId, setActiveDropdownEnquiryId] = useState<string | null>(null);
   const [newNoteText, setNewNoteText] = useState("");
   const [toastMessage, setToastMessage] = useState("");
 
-  // Create Form state
+  // ── PIPELINE: Schedule Follow-up ──────────────────────────────────────
+  const [followUpEnquiry, setFollowUpEnquiry] = useState<Enquiry | null>(null);
+  const [fuType, setFuType] = useState<"Phone Call" | "WhatsApp" | "Email" | "Video Call" | "Site Visit" | "In-Person">("Phone Call");
+  const [fuDate, setFuDate] = useState(new Date(Date.now() + 86400000).toISOString().split("T")[0]);
+  const [fuTime, setFuTime] = useState("11:00 AM");
+  const [fuPurpose, setFuPurpose] = useState("");
+  const [fuAssignedTo, setFuAssignedTo] = useState(users[0]?.fullName || "");
+
+  const handleOpenFollowUpModal = (enq: Enquiry) => {
+    setFollowUpEnquiry(enq);
+    setFuType("Phone Call");
+    setFuDate(new Date(Date.now() + 86400000).toISOString().split("T")[0]);
+    setFuTime("11:00 AM");
+    setFuPurpose(`Follow up with ${enq.clientName} regarding ${enq.requirement}`);
+    const assignedUser = users.find((u) => u.id === enq.assignedTo);
+    setFuAssignedTo(assignedUser?.fullName || users[0]?.fullName || "");
+  };
+
+  const handleScheduleFollowUp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!followUpEnquiry) return;
+    addFollowUp({
+      leadName: followUpEnquiry.clientName,
+      businessName: followUpEnquiry.company || followUpEnquiry.clientName,
+      contactNumber: followUpEnquiry.phone || "+91 98765 00000",
+      type: fuType,
+      scheduledDate: fuDate,
+      scheduledTime: fuTime,
+      assignedTo: fuAssignedTo,
+      purpose: fuPurpose.trim() || `Follow up with ${followUpEnquiry.clientName}`,
+      status: "Scheduled",
+    });
+    if (followUpEnquiry.status === "New") {
+      updateEnquiryStatus(followUpEnquiry.id, "Contacted");
+    }
+    setFollowUpEnquiry(null);
+    showToast("✅ Follow-up scheduled! Redirecting to Follow-ups...");
+    setTimeout(() => router.push("/crm/admin/follow-ups"), 1200);
+  };
+
+  // ── PIPELINE: Convert to Client ─────────────────────────────────────────
+  const [clientEnquiry, setClientEnquiry] = useState<Enquiry | null>(null);
+  const [cliCategory, setCliCategory] = useState("Software Development");
+  const [cliAddress, setCliAddress] = useState("");
+  const [cliManager, setCliManager] = useState(users[0]?.fullName || "");
+
+  const handleOpenClientModal = (enq: Enquiry) => {
+    setClientEnquiry(enq);
+    setCliCategory(enq.projectType || "Software Development");
+    setCliAddress(enq.location || "Chennai, Tamil Nadu");
+    const assignedUser = users.find((u) => u.id === enq.assignedTo);
+    setCliManager(assignedUser?.fullName || users[0]?.fullName || "");
+  };
+
+  const handleConvertToClient = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clientEnquiry) return;
+    addClient({
+      companyName: clientEnquiry.company || clientEnquiry.clientName,
+      primaryContact: clientEnquiry.clientName,
+      email: clientEnquiry.email || `${clientEnquiry.clientName.toLowerCase().replace(/\s/g, "")}@example.com`,
+      phone: clientEnquiry.phone || "+91 98765 00000",
+      category: cliCategory,
+      assignedManager: cliManager,
+      address: cliAddress,
+      totalProjects: 0,
+      totalBilled: clientEnquiry.estimatedBudget || 0,
+      totalCollected: 0,
+      outstanding: clientEnquiry.estimatedBudget || 0,
+      status: "Active",
+    });
+    updateEnquiryStatus(clientEnquiry.id, "Qualified");
+    setClientEnquiry(null);
+    showToast("🎉 Client created! Redirecting to Clients...");
+    setTimeout(() => router.push("/crm/admin/clients"), 1200);
+  };
+
+  // Create/Edit Form state
   const [clientName, setClientName] = useState("");
   const [company, setCompany] = useState("");
   const [requirement, setRequirement] = useState("");
@@ -237,6 +327,7 @@ export default function EnquiryListPage() {
   };
 
   const handleOpenAddModal = () => {
+    setEditingEnquiry(null);
     setClientName("");
     setCompany("");
     setRequirement("");
@@ -253,6 +344,36 @@ export default function EnquiryListPage() {
     setInitialStatus("New");
     setAssignedTo(users[0]?.id || currentUserId || "usr-001");
     setIsAddModalOpen(true);
+  };
+
+  const handleOpenEditModal = (enq: Enquiry) => {
+    setEditingEnquiry(enq);
+    setClientName(enq.clientName || "");
+    setCompany(enq.company || "");
+    setRequirement(enq.requirement || "");
+    setBudget(enq.estimatedBudget ? enq.estimatedBudget.toString() : "150000");
+    setSource(enq.source || "Instagram");
+    setPhone(enq.phone || "");
+    setWhatsapp(enq.whatsapp || "");
+    setEmail(enq.email || "");
+    setLocation(enq.location || "Chennai, Tamil Nadu");
+    setProjectType(enq.projectType || "Website + Android App");
+    setTimeline(enq.expectedTimeline || "4 Weeks");
+    setDescription(enq.description || "");
+    setPriority(enq.priority || "High");
+    setInitialStatus(enq.status || "New");
+    setAssignedTo(enq.assignedTo || users[0]?.id || "usr-001");
+    setIsAddModalOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deleteTarget) return;
+    deleteEnquiry(deleteTarget.id);
+    if (selectedEnquiryId === deleteTarget.id) {
+      setSelectedEnquiryId(null);
+    }
+    setDeleteTarget(null);
+    showToast("Enquiry deleted successfully.");
   };
 
   const filteredEnquiries = enquiries.filter((e) => {
@@ -281,6 +402,32 @@ export default function EnquiryListPage() {
 
     const assignedUser = users.find((u) => u.id === assignedTo) || users[0];
     const generatedEmail = email.trim() || `${clientName.toLowerCase().replace(/[^a-z0-9]/g, "")}@example.com`;
+
+    if (editingEnquiry) {
+      updateEnquiry(editingEnquiry.id, {
+        clientName: clientName.trim(),
+        company: company.trim() || clientName.trim(),
+        requirement: requirement.trim(),
+        estimatedBudget: Number(budget) || 0,
+        source: source || "Direct Call",
+        assignedTo: assignedUser?.id || "usr-001",
+        assignedToName: assignedUser?.fullName || "Tamil Selvan",
+        priority,
+        status: initialStatus,
+        phone: phone.trim() || "+91 98765 00000",
+        whatsapp: whatsapp.trim() || phone.trim() || "+91 98765 00000",
+        email: generatedEmail,
+        location: location.trim() || "Chennai, Tamil Nadu",
+        projectType: projectType || requirement.trim(),
+        services: [projectType || "Web Development", "UI/UX Design"],
+        description: description.trim(),
+        expectedTimeline: timeline || "4 Weeks",
+      });
+      setIsAddModalOpen(false);
+      setEditingEnquiry(null);
+      showToast("Enquiry updated successfully!");
+      return;
+    }
 
     addEnquiry({
       clientName: clientName.trim(),
@@ -512,13 +659,20 @@ export default function EnquiryListPage() {
                 <th>Priority</th>
                 <th>Status (Quick Update)</th>
                 <th>Created</th>
+                <th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredEnquiries.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-xs text-[#64748B]">
-                    No enquiries found matching filters.
+                  <td colSpan={10} className="py-12 text-center">
+                    <EmptyState
+                      icon={Users}
+                      title="No enquiries found"
+                      description="Create an enquiry lead or adjust your filter criteria."
+                      actionLabel="+ New Enquiry"
+                      onAction={handleOpenAddModal}
+                    />
                   </td>
                 </tr>
               ) : (
@@ -564,19 +718,60 @@ export default function EnquiryListPage() {
                         </span>
                       </td>
                       {/* Interactive Status Selector Dropdown */}
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <StatusDropdown
-                          currentStatus={enq.status}
-                          onStatusChange={(newStatus) => handleStatusChange(enq.id, newStatus)}
-                          isOpen={activeDropdownEnquiryId === enq.id}
-                          onToggle={(e) => {
-                            e.stopPropagation();
-                            setActiveDropdownEnquiryId(activeDropdownEnquiryId === enq.id ? null : enq.id);
-                          }}
-                          onClose={() => setActiveDropdownEnquiryId(null)}
-                        />
+                      <td onClick={(e) => {
+                        if (enq.status !== "New") {
+                          e.stopPropagation();
+                          return;
+                        }
+                        e.stopPropagation();
+                      }}>
+                        <div className={enq.status !== "New" ? "pointer-events-none opacity-60" : ""}>
+                          <StatusDropdown
+                            currentStatus={enq.status}
+                            onStatusChange={(newStatus) => handleStatusChange(enq.id, newStatus)}
+                            isOpen={activeDropdownEnquiryId === enq.id}
+                            onToggle={(e) => {
+                              e.stopPropagation();
+                              if (enq.status === "New") {
+                                setActiveDropdownEnquiryId(activeDropdownEnquiryId === enq.id ? null : enq.id);
+                              }
+                            }}
+                            onClose={() => setActiveDropdownEnquiryId(null)}
+                          />
+                        </div>
                       </td>
                       <td className="text-[#64748B]">{enq.createdDate}</td>
+                      <td onClick={(e) => e.stopPropagation()} className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenFollowUpModal(enq)}
+                            disabled={enq.status !== "New"}
+                            className="p-1.5 text-[#64748B] hover:text-[#7C3AED] hover:bg-purple-50 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                            title="Schedule Follow-up"
+                          >
+                            <CalendarCheck className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(enq)}
+                            disabled={enq.status !== "New"}
+                            className="p-1.5 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                            title="Edit Lead"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(enq)}
+                            disabled={enq.status !== "New"}
+                            className="p-1.5 text-[#64748B] hover:text-[#DC2626] hover:bg-red-50 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                            title="Delete Lead"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
@@ -601,6 +796,24 @@ export default function EnquiryListPage() {
                   <p className="text-xs text-[#64748B]">{selectedEnquiry.requirement}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditModal(selectedEnquiry)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#E2E8F0] bg-white text-xs font-semibold text-[#0F172A] hover:bg-slate-50 transition-colors cursor-pointer"
+                    title="Edit Lead"
+                  >
+                    <Edit2 className="h-3.5 w-3.5 text-[#2563EB]" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(selectedEnquiry)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50 text-xs font-semibold text-[#DC2626] hover:bg-red-100 transition-colors cursor-pointer"
+                    title="Delete Lead"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Delete</span>
+                  </button>
                   <Link
                     href={`/crm/admin/enquiries/${selectedEnquiry.id}`}
                     className="p-1.5 rounded-lg text-[#64748B] hover:bg-slate-100 hover:text-[#0F172A]"
@@ -798,24 +1011,225 @@ export default function EnquiryListPage() {
               </div>
             </div>
 
-            {/* Bottom Drawer Actions */}
-            <div className="pt-4 border-t border-[#E2E8F0] flex items-center justify-between gap-3 mt-4">
+            {/* Bottom Drawer Actions — Full Pipeline */}
+            <div className="pt-4 border-t border-[#E2E8F0] space-y-3 mt-4">
+              {/* Pipeline label */}
+              <div className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-widest text-center">
+                Move Lead Through Pipeline
+              </div>
+
+              {/* Pipeline stepper visual */}
+              <div className="flex items-center justify-between gap-1 px-1">
+                <div className="flex flex-col items-center gap-1">
+                  <div className="h-6 w-6 rounded-full bg-amber-100 border-2 border-amber-400 flex items-center justify-center">
+                    <span className="text-[9px] font-bold text-amber-700">1</span>
+                  </div>
+                  <span className="text-[9px] text-amber-700 font-semibold">Follow-up</span>
+                </div>
+                <ArrowRight className="h-3 w-3 text-[#CBD5E1] shrink-0" />
+                <div className="flex flex-col items-center gap-1">
+                  <div className="h-6 w-6 rounded-full bg-blue-100 border-2 border-blue-400 flex items-center justify-center">
+                    <span className="text-[9px] font-bold text-blue-700">2</span>
+                  </div>
+                  <span className="text-[9px] text-blue-700 font-semibold">Client</span>
+                </div>
+                <ArrowRight className="h-3 w-3 text-[#CBD5E1] shrink-0" />
+                <div className="flex flex-col items-center gap-1">
+                  <div className="h-6 w-6 rounded-full bg-emerald-100 border-2 border-emerald-500 flex items-center justify-center">
+                    <span className="text-[9px] font-bold text-emerald-700">3</span>
+                  </div>
+                  <span className="text-[9px] text-emerald-700 font-semibold">Project</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedEnquiryId(null);
+                    handleOpenFollowUpModal(selectedEnquiry);
+                  }}
+                  disabled={selectedEnquiry.status !== "New"}
+                  className="flex flex-col items-center gap-1 rounded-xl bg-amber-500 px-2 py-2.5 text-[10px] font-bold text-white hover:bg-amber-600 shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 disabled:hover:bg-amber-500"
+                >
+                  <CalendarCheck className="h-4 w-4" />
+                  <span>Schedule Follow-up</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedEnquiryId(null);
+                    handleOpenClientModal(selectedEnquiry);
+                  }}
+                  disabled={selectedEnquiry.status !== "New"}
+                  className="flex flex-col items-center gap-1 rounded-xl bg-blue-600 px-2 py-2.5 text-[10px] font-bold text-white hover:bg-blue-700 shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 disabled:hover:bg-blue-600"
+                >
+                  <UserCheck className="h-4 w-4" />
+                  <span>Move to Client</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleConvertToProject(selectedEnquiry)}
+                  disabled={selectedEnquiry.status !== "New"}
+                  className="flex flex-col items-center gap-1 rounded-xl bg-emerald-600 px-2 py-2.5 text-[10px] font-bold text-white hover:bg-emerald-700 shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 disabled:hover:bg-emerald-600"
+                >
+                  <FolderPlus className="h-4 w-4" />
+                  <span>Create Project</span>
+                </button>
+              </div>
+
               <button
                 type="button"
                 onClick={() => setSelectedEnquiryId(null)}
-                className="rounded-xl border border-[#E2E8F0] px-4 py-2 text-xs font-semibold text-[#64748B] hover:bg-[#F8FAFC]"
+                className="w-full rounded-xl border border-[#E2E8F0] px-4 py-2 text-xs font-semibold text-[#64748B] hover:bg-[#F8FAFC] transition-colors"
               >
                 Close
               </button>
-              <button
-                type="button"
-                onClick={() => handleConvertToProject(selectedEnquiry)}
-                className="flex items-center gap-1.5 rounded-xl bg-[#16A34A] px-4 py-2 text-xs font-semibold text-white hover:bg-green-700 shadow-xs transition-colors"
-              >
-                <FolderPlus className="h-4 w-4" />
-                <span>Convert to Project</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Schedule Follow-up ─────────────────────────────────── */}
+      {followUpEnquiry && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-2xl border border-[#E2E8F0] bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center gap-3 border-b border-[#E2E8F0] px-5 py-4 bg-gradient-to-r from-amber-50 to-white">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm">
+                <CalendarCheck className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-sm text-[#0F172A]">Schedule Follow-up</h3>
+                <p className="text-[11px] text-[#64748B] truncate">for {followUpEnquiry.clientName} · {followUpEnquiry.company}</p>
+              </div>
+              <button onClick={() => setFollowUpEnquiry(null)} className="p-1.5 rounded-lg text-[#64748B] hover:bg-slate-100 transition-colors">
+                <X className="h-4 w-4" />
               </button>
             </div>
+            {/* Pipeline step indicator */}
+            <div className="flex items-center gap-1 px-5 py-2 bg-amber-50/60 text-[10px] text-amber-700 font-semibold">
+              <span className="h-4 w-4 rounded-full bg-amber-500 text-white flex items-center justify-center text-[9px] font-bold">1</span>
+              <span>Step 1 of 3 — Enquiry → Follow-up</span>
+            </div>
+            <form onSubmit={handleScheduleFollowUp} className="p-5 space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Contact Type</label>
+                  <select value={fuType} onChange={(e) => setFuType(e.target.value as typeof fuType)}
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:outline-hidden focus:border-amber-400">
+                    {["Phone Call","WhatsApp","Email","Video Call","Site Visit","In-Person"].map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Assigned To</label>
+                  <select value={fuAssignedTo} onChange={(e) => setFuAssignedTo(e.target.value)}
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:outline-hidden focus:border-amber-400">
+                    {users.map(u => <option key={u.id} value={u.fullName}>{u.fullName}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Date <span className="text-red-500">*</span></label>
+                  <input type="date" required value={fuDate} onChange={(e) => setFuDate(e.target.value)}
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:outline-hidden focus:border-amber-400" />
+                </div>
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Time</label>
+                  <input type="text" value={fuTime} onChange={(e) => setFuTime(e.target.value)} placeholder="11:00 AM"
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:outline-hidden focus:border-amber-400" />
+                </div>
+              </div>
+              <div>
+                <label className="font-semibold text-[#0F172A] block mb-1">Purpose / Agenda</label>
+                <textarea rows={2} value={fuPurpose} onChange={(e) => setFuPurpose(e.target.value)}
+                  placeholder="e.g. Discuss project scope and pricing..."
+                  className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:outline-hidden focus:border-amber-400 resize-none" />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" onClick={() => setFollowUpEnquiry(null)}
+                  className="rounded-xl border border-[#E2E8F0] px-4 py-2 text-xs font-semibold text-[#64748B] hover:bg-slate-50 transition-colors">Cancel</button>
+                <button type="submit"
+                  className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-5 py-2 text-xs font-bold text-white hover:bg-amber-600 shadow-sm transition-colors">
+                  <CalendarCheck className="h-3.5 w-3.5" />
+                  Schedule & Move to Follow-ups
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Convert to Client ─────────────────────────────────────── */}
+      {clientEnquiry && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-2xl border border-[#E2E8F0] bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center gap-3 border-b border-[#E2E8F0] px-5 py-4 bg-gradient-to-r from-blue-50 to-white">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
+                <UserCheck className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-sm text-[#0F172A]">Convert to Client</h3>
+                <p className="text-[11px] text-[#64748B] truncate">{clientEnquiry.clientName} · {clientEnquiry.company}</p>
+              </div>
+              <button onClick={() => setClientEnquiry(null)} className="p-1.5 rounded-lg text-[#64748B] hover:bg-slate-100 transition-colors">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {/* Pipeline step indicator */}
+            <div className="flex items-center gap-1 px-5 py-2 bg-blue-50/60 text-[10px] text-blue-700 font-semibold">
+              <span className="h-4 w-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[9px] font-bold">2</span>
+              <span>Step 2 of 3 — Follow-up → Client</span>
+            </div>
+            <form onSubmit={handleConvertToClient} className="p-5 space-y-4 text-xs">
+              {/* Auto-filled summary */}
+              <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3 space-y-1">
+                <div className="text-[11px] font-bold text-[#0F172A] flex items-center gap-1.5">
+                  <Building2 className="h-3.5 w-3.5 text-blue-600" />
+                  Auto-filled from Enquiry
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[10px] text-[#64748B]">
+                  <span><b>Contact:</b> {clientEnquiry.clientName}</span>
+                  <span><b>Company:</b> {clientEnquiry.company}</span>
+                  <span><b>Phone:</b> {clientEnquiry.phone}</span>
+                  <span><b>Budget:</b> ₹{clientEnquiry.estimatedBudget?.toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Service Category</label>
+                  <select value={cliCategory} onChange={(e) => setCliCategory(e.target.value)}
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:outline-hidden focus:border-blue-400">
+                    {["Software Development","Mobile App","E-Commerce","UI/UX Design","Digital Marketing","IT Consulting","Startup","Enterprise"].map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Assigned Manager</label>
+                  <select value={cliManager} onChange={(e) => setCliManager(e.target.value)}
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:outline-hidden focus:border-blue-400">
+                    {users.map(u => <option key={u.id} value={u.fullName}>{u.fullName}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="font-semibold text-[#0F172A] block mb-1">Address / Location</label>
+                <input type="text" value={cliAddress} onChange={(e) => setCliAddress(e.target.value)}
+                  placeholder="e.g. Chennai, Tamil Nadu"
+                  className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:outline-hidden focus:border-blue-400" />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" onClick={() => setClientEnquiry(null)}
+                  className="rounded-xl border border-[#E2E8F0] px-4 py-2 text-xs font-semibold text-[#64748B] hover:bg-slate-50 transition-colors">Cancel</button>
+                <button type="submit"
+                  className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white hover:bg-blue-700 shadow-sm transition-colors">
+                  <UserCheck className="h-3.5 w-3.5" />
+                  Create Client Record
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -828,18 +1242,25 @@ export default function EnquiryListPage() {
             <div className="flex items-center justify-between border-b border-[#E2E8F0] px-6 py-4 bg-gradient-to-r from-blue-50/60 via-slate-50/40 to-white">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#2563EB] text-white shadow-sm">
-                  <UserPlus className="h-5 w-5" />
+                  {editingEnquiry ? <Edit2 className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-[#0F172A]">Create New Lead / Enquiry</h3>
+                  <h3 className="font-bold text-base text-[#0F172A]">
+                    {editingEnquiry ? "Edit Lead / Enquiry Details" : "Create New Lead / Enquiry"}
+                  </h3>
                   <p className="text-xs text-[#64748B]">
-                    Add prospective client details, scope, budget and team assignment.
+                    {editingEnquiry
+                      ? "Update client information, commercial budget, and assignment."
+                      : "Add prospective client details, scope, budget and team assignment."}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={() => {
+                  setIsAddModalOpen(false);
+                  setEditingEnquiry(null);
+                }}
                 className="rounded-lg p-1.5 text-[#64748B] hover:bg-slate-100 hover:text-[#0F172A] transition-colors cursor-pointer"
               >
                 <X className="h-4 w-4" />
@@ -1123,7 +1544,10 @@ export default function EnquiryListPage() {
               <div className="flex items-center justify-between gap-3 border-t border-[#E2E8F0] pt-4 mt-6">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={() => {
+                    setIsAddModalOpen(false);
+                    setEditingEnquiry(null);
+                  }}
                   className="rounded-xl border border-[#E2E8F0] px-4 py-2 font-semibold text-[#64748B] hover:bg-[#F8FAFC] transition-colors cursor-pointer"
                 >
                   Cancel
@@ -1133,8 +1557,17 @@ export default function EnquiryListPage() {
                     type="submit"
                     className="flex items-center gap-2 rounded-xl bg-[#2563EB] px-5 py-2 font-semibold text-white hover:bg-blue-700 shadow-sm transition-all cursor-pointer active:scale-95"
                   >
-                    <Plus className="h-4 w-4" />
-                    <span>Create & Track Enquiry</span>
+                    {editingEnquiry ? (
+                      <>
+                        <Check className="h-4 w-4" />
+                        <span>Save Lead Changes</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4" />
+                        <span>Create & Track Enquiry</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1142,6 +1575,17 @@ export default function EnquiryListPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Delete Lead / Enquiry"
+        message={`Are you sure you want to permanently delete enquiry for "${deleteTarget?.clientName}" (${deleteTarget?.company})? This action cannot be undone.`}
+        confirmLabel="Delete Lead"
+        variant="danger"
+        onConfirm={handleDeleteConfirm}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

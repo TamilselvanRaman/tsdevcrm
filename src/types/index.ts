@@ -357,3 +357,70 @@ export interface ProjectDocument {
   bankDetails?: BankDetails;
 }
 
+export interface ClientRecord {
+  id: string;
+  companyName: string;
+  primaryContact: string;
+  email: string;
+  phone: string;
+  category: string;
+  assignedManager: string;
+  totalProjects: number;
+  totalBilled: number;
+  totalCollected: number;
+  outstanding: number;
+  status: "Active" | "Inactive";
+  address?: string;
+  createdAt?: string;
+}
+
+export interface ExpenseRecord {
+  id: string;
+  category: string;
+  description: string;
+  amount: number;
+  date: string;
+  projectName: string;
+  submittedBy: string;
+  status: "Approved" | "Pending" | "Rejected";
+  receiptUrl?: string;
+}
+
+export interface NoteItem {
+  id: string;
+  title: string;
+  content: string;
+  category: "Client Requirement" | "Technical Note" | "Meeting Minutes" | "Internal Policy" | "General Info";
+  author: string;
+  isPinned: boolean;
+  date: string;
+}
+
+export interface NoticeItem {
+  id: string;
+  title: string;
+  content: string;
+  category: "Policy Update" | "Holiday Notice" | "Project Kickoff" | "Client Feedback" | "Team Announcements";
+  priority: "High" | "Medium" | "Low";
+  targetDepartment: string;
+  publishedDate: string;
+  author: string;
+  acknowledgements: number;
+}
+
+export interface FollowUpItem {
+  id: string;
+  leadId?: string;
+  leadName: string;
+  businessName: string;
+  contactNumber: string;
+  type: "Phone Call" | "WhatsApp" | "Email" | "Video Call" | "Site Visit" | "In-Person" | "Meeting" | "Demo";
+  scheduledDate: string;
+  scheduledTime: string;
+  assignedTo: string;
+  purpose: string;
+  status: "Scheduled" | "Completed" | "Overdue" | "Rescheduled";
+  notes?: string;
+}
+
+

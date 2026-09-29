@@ -27,9 +27,12 @@ import {
   MoreHorizontal,
   ChevronDown,
   Check,
+  Edit2,
+  Trash2,
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
-import { TaskStatus, TaskPriority } from "@/types";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { TaskStatus, TaskPriority, Task } from "@/types";
 import { clsx } from "clsx";
 
 interface ColumnDef {
@@ -166,7 +169,9 @@ export default function TaskManagementPage() {
     projects,
     users,
     addTask,
+    updateTask,
     updateTaskStatus,
+    deleteTask,
     toggleTaskBlock,
     toggleChecklistItem,
     addChecklistItem,
@@ -185,6 +190,8 @@ export default function TaskManagementPage() {
   const [assigneeFilter, setAssigneeFilter] = useState<string>("All");
   const [priorityFilter, setPriorityFilter] = useState<string>("All");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   // New task form state
@@ -197,6 +204,16 @@ export default function TaskManagementPage() {
   const [estHours, setEstHours] = useState("6");
   const [targetColumnStatus, setTargetColumnStatus] = useState<TaskStatus>("TODO");
 
+  // Edit task form state
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editProjectId, setEditProjectId] = useState("");
+  const [editAssignedTo, setEditAssignedTo] = useState("");
+  const [editPriority, setEditPriority] = useState<TaskPriority>("High");
+  const [editDueDate, setEditDueDate] = useState("");
+  const [editEstHours, setEditEstHours] = useState("4");
+  const [editStatus, setEditStatus] = useState<TaskStatus>("TODO");
+
   // Drawer local state
   const [newChecklistTitle, setNewChecklistTitle] = useState("");
   const [newCommentText, setNewCommentText] = useState("");
@@ -206,6 +223,53 @@ export default function TaskManagementPage() {
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(""), 3000);
+  };
+
+  const handleOpenEditModal = (task: Task) => {
+    setEditingTask(task);
+    setEditTitle(task.title);
+    setEditDescription(task.description);
+    setEditProjectId(task.projectId);
+    setEditAssignedTo(task.assignedTo);
+    setEditPriority(task.priority);
+    setEditDueDate(task.dueDate);
+    setEditEstHours(task.estimatedHours ? task.estimatedHours.toString() : "4");
+    setEditStatus(task.status);
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTask || !editTitle.trim()) return;
+
+    const prj = projects.find((p) => p.id === editProjectId);
+    const assignedUser = users.find((u) => u.id === editAssignedTo);
+
+    updateTask(editingTask.id, {
+      title: editTitle.trim(),
+      description: editDescription.trim(),
+      projectId: editProjectId,
+      projectName: prj?.projectName || editingTask.projectName,
+      assignedTo: editAssignedTo,
+      assignedToName: assignedUser?.fullName || editingTask.assignedToName,
+      assignedToAvatar: assignedUser?.avatarUrl || editingTask.assignedToAvatar,
+      priority: editPriority,
+      dueDate: editDueDate,
+      estimatedHours: Number(editEstHours) || 1,
+      status: editStatus,
+    });
+
+    showToast(`Task "${editTitle}" updated.`);
+    setEditingTask(null);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deletingTaskId) return;
+    deleteTask(deletingTaskId);
+    if (selectedTaskId === deletingTaskId) {
+      setSelectedTaskId(null);
+    }
+    showToast("Task deleted successfully.");
+    setDeletingTaskId(null);
   };
 
   const filteredTasks = tasks.filter((t) => {
@@ -696,11 +760,27 @@ export default function TaskManagementPage() {
                             <button
                               type="button"
                               onClick={() => setSelectedTaskId(t.id)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#0F172A] hover:bg-[#F8FAFC] shadow-2xs transition-colors"
+                              className="inline-flex items-center gap-1 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#0F172A] hover:bg-[#F8FAFC] shadow-2xs transition-colors cursor-pointer"
                               title="Open Task Workspace"
                             >
                               <Eye className="h-3.5 w-3.5 text-[#2563EB]" />
                               <span>View</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(t)}
+                              className="p-1.5 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                              title="Edit Task"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingTaskId(t.id)}
+                              className="p-1.5 text-[#64748B] hover:text-[#DC2626] hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                              title="Delete Task"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
                             <Link
                               href={`/tasks/${t.id}`}
@@ -739,7 +819,21 @@ export default function TaskManagementPage() {
                   </div>
                   <h2 className="text-lg font-bold text-[#0F172A]">{selectedTask.title}</h2>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => handleOpenEditModal(selectedTask)}
+                    className="p-1.5 rounded-lg text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 cursor-pointer"
+                    title="Edit Task"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => setDeletingTaskId(selectedTask.id)}
+                    className="p-1.5 rounded-lg text-[#64748B] hover:text-[#DC2626] hover:bg-red-50 cursor-pointer"
+                    title="Delete Task"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                   <Link
                     href={`/tasks/${selectedTask.id}`}
                     className="p-1.5 rounded-lg text-[#64748B] hover:bg-slate-100 hover:text-[#0F172A]"
@@ -749,7 +843,7 @@ export default function TaskManagementPage() {
                   </Link>
                   <button
                     onClick={() => setSelectedTaskId(null)}
-                    className="p-1.5 rounded-lg text-[#64748B] hover:bg-slate-100 hover:text-[#0F172A]"
+                    className="p-1.5 rounded-lg text-[#64748B] hover:bg-slate-100 hover:text-[#0F172A] cursor-pointer"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -1175,6 +1269,159 @@ export default function TaskManagementPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Edit Task Modal */}
+      {editingTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-2xs p-4 overflow-y-auto">
+          <div className="w-full max-w-lg rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-2xl space-y-4 my-8">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
+              <div>
+                <h3 className="font-bold text-base text-[#0F172A]">Edit Task: {editingTask.taskKey}</h3>
+                <p className="text-xs text-[#64748B]">Update task assignee, priority, deadline, or workflow status</p>
+              </div>
+              <button
+                onClick={() => setEditingTask(null)}
+                className="rounded-lg p-1 text-[#64748B] hover:bg-[#F8FAFC] cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-3.5 text-xs">
+              <div>
+                <label className="font-semibold text-[#0F172A] block mb-1">Task Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-[#0F172A] block mb-1">Description & Acceptance Criteria</label>
+                <textarea
+                  rows={2}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Project</label>
+                  <select
+                    value={editProjectId}
+                    onChange={(e) => setEditProjectId(e.target.value)}
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-2 text-xs text-[#0F172A] focus:border-[#2563EB]"
+                  >
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.projectName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Assignee</label>
+                  <select
+                    value={editAssignedTo}
+                    onChange={(e) => setEditAssignedTo(e.target.value)}
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-2 text-xs text-[#0F172A] focus:border-[#2563EB]"
+                  >
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.fullName} ({u.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Workflow Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as TaskStatus)}
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-white px-2 py-2 text-xs text-[#0F172A] focus:border-[#2563EB]"
+                  >
+                    {KANBAN_COLUMNS.map((c) => (
+                      <option key={c.status} value={c.status}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Priority</label>
+                  <select
+                    value={editPriority}
+                    onChange={(e) => setEditPriority(e.target.value as TaskPriority)}
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-white px-2 py-2 text-xs text-[#0F172A] focus:border-[#2563EB]"
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Urgent">Urgent</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Due Date</label>
+                  <input
+                    type="date"
+                    value={editDueDate}
+                    onChange={(e) => setEditDueDate(e.target.value)}
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-white px-2 py-1.5 text-xs text-[#0F172A] focus:border-[#2563EB]"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Est. Hours</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={editEstHours}
+                    onChange={(e) => setEditEstHours(e.target.value)}
+                    className="w-full rounded-lg border border-[#E2E8F0] bg-white px-2 py-1.5 text-xs text-[#0F172A] focus:border-[#2563EB]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-[#E2E8F0] pt-3 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setEditingTask(null)}
+                  className="rounded-xl border border-[#E2E8F0] px-4 py-2 font-semibold text-[#64748B] hover:bg-[#F8FAFC] cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex items-center gap-1.5 rounded-xl bg-[#2563EB] px-5 py-2 font-semibold text-white hover:bg-blue-700 shadow-xs transition-colors cursor-pointer"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Save Changes</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Task Confirm Dialog */}
+      {deletingTaskId && (
+        <ConfirmDialog
+          isOpen={!!deletingTaskId}
+          onClose={() => setDeletingTaskId(null)}
+          onConfirm={handleConfirmDelete}
+          title="Delete Task?"
+          message="Are you sure you want to permanently delete this task? All subtasks and logged comments will be removed."
+          confirmLabel="Delete Task"
+          variant="danger"
+        />
       )}
     </div>
   );

@@ -25,22 +25,37 @@ import {
   ArrowRight,
   CheckSquare,
   Sparkles,
+  Edit2,
+  Trash2,
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ProjectStatus, Project } from "@/types";
 
 export default function ProjectListPage() {
   const router = useRouter();
-  const { projects, addProject, updateProjectStatus, users, tasks } = useAppStore();
+  const { projects, addProject, updateProject, updateProjectStatus, deleteProject, users, tasks } = useAppStore();
 
   const [viewMode, setViewMode] = useState<"table" | "card">("table");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
   const [managerFilter, setManagerFilter] = useState<string>("All");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [welcomeNoteProject, setWelcomeNoteProject] = useState<Project | null>(null);
   const [toastMessage, setToastMessage] = useState("");
+
+  // Edit Form state
+  const [editProjectName, setEditProjectName] = useState("");
+  const [editClientName, setEditClientName] = useState("");
+  const [editManagerId, setEditManagerId] = useState("");
+  const [editBudget, setEditBudget] = useState("");
+  const [editDeadline, setEditDeadline] = useState("");
+  const [editProgressPct, setEditProgressPct] = useState(0);
+  const [editStatus, setEditStatus] = useState<ProjectStatus>("In Progress");
+  const [editDescription, setEditDescription] = useState("");
 
   // Form state
   const [projectName, setProjectName] = useState("");
@@ -114,6 +129,48 @@ export default function ProjectListPage() {
   const handleStatusChange = (projectId: string, newStatus: ProjectStatus) => {
     updateProjectStatus(projectId, newStatus);
     showToast(`Project status updated to ${newStatus}`);
+  };
+
+  const handleOpenEditModal = (prj: Project) => {
+    setEditingProject(prj);
+    setEditProjectName(prj.projectName);
+    setEditClientName(prj.clientName);
+    setEditManagerId(prj.managerId);
+    setEditBudget(prj.budget ? prj.budget.toString() : "0");
+    setEditDeadline(prj.deadline);
+    setEditProgressPct(prj.progressPct || 0);
+    setEditStatus(prj.status);
+    setEditDescription(prj.description || "");
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProject || !editProjectName.trim()) return;
+
+    const pm = users.find((u) => u.id === editManagerId);
+
+    updateProject(editingProject.id, {
+      projectName: editProjectName.trim(),
+      clientName: editClientName.trim(),
+      managerId: editManagerId,
+      managerName: pm?.fullName || editingProject.managerName,
+      budget: Number(editBudget) || 0,
+      deadline: editDeadline,
+      progressPct: Number(editProgressPct) || 0,
+      status: editStatus,
+      description: editDescription.trim(),
+    });
+
+    showToast(`Project "${editProjectName}" updated.`);
+    setEditingProject(null);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deletingProjectId) return;
+    const target = projects.find((p) => p.id === deletingProjectId);
+    deleteProject(deletingProjectId);
+    showToast(`Project "${target?.projectName || "Record"}" deleted.`);
+    setDeletingProjectId(null);
   };
 
   const handlePrintPDF = () => {
@@ -223,7 +280,7 @@ export default function ProjectListPage() {
           </div>
           <div className="flex items-baseline justify-between">
             <span className="text-2xl font-bold text-[#0F172A]">
-              {projects.filter((p) => p.status === "Completed").length + 42}
+              {projects.filter((p) => p.status === "Completed").length + 0}
             </span>
             <span className="text-[11px] font-medium text-[#16A34A]">Delivered</span>
           </div>
@@ -393,10 +450,24 @@ export default function ProjectListPage() {
                           </button>
                           <button
                             onClick={() => setSelectedProjectId(prj.id)}
-                            className="inline-flex p-1.5 text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors"
+                            className="inline-flex p-1.5 text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                             title="Quick Details Drawer"
                           >
                             <Eye className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleOpenEditModal(prj)}
+                            className="inline-flex p-1.5 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                            title="Edit Project"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => setDeletingProjectId(prj.id)}
+                            className="inline-flex p-1.5 text-[#64748B] hover:text-[#DC2626] hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                            title="Delete Project"
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </button>
                           <Link
                             href={`/crm/admin/projects/${prj.id}`}
@@ -978,6 +1049,153 @@ export default function ProjectListPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Edit Project Modal */}
+      {editingProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-2xs p-4 overflow-y-auto">
+          <div className="w-full max-w-lg rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-2xl space-y-4 my-8">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
+              <div>
+                <h3 className="font-bold text-base text-[#0F172A]">Edit Project: {editingProject.projectCode}</h3>
+                <p className="text-xs text-[#64748B]">Update project milestones, deadline, budget, or manager</p>
+              </div>
+              <button
+                onClick={() => setEditingProject(null)}
+                className="rounded-lg p-1 text-[#64748B] hover:bg-[#F8FAFC] cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-3.5 text-xs">
+              <div>
+                <label className="font-semibold text-[#0F172A] block mb-1">Project Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editProjectName}
+                  onChange={(e) => setEditProjectName(e.target.value)}
+                  className="w-full rounded-lg border border-[#E2E8F0] px-3 py-1.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-[#0F172A] block mb-1">Client Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editClientName}
+                  onChange={(e) => setEditClientName(e.target.value)}
+                  className="w-full rounded-lg border border-[#E2E8F0] px-3 py-1.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Budget (₹)</label>
+                  <input
+                    type="number"
+                    value={editBudget}
+                    onChange={(e) => setEditBudget(e.target.value)}
+                    className="w-full rounded-lg border border-[#E2E8F0] px-3 py-1.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Project Manager</label>
+                  <select
+                    value={editManagerId}
+                    onChange={(e) => setEditManagerId(e.target.value)}
+                    className="w-full rounded-lg border border-[#E2E8F0] px-2.5 py-1.5 text-xs text-[#0F172A] focus:outline-hidden"
+                  >
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.fullName} ({u.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Target Deadline</label>
+                  <input
+                    type="date"
+                    value={editDeadline}
+                    onChange={(e) => setEditDeadline(e.target.value)}
+                    className="w-full rounded-lg border border-[#E2E8F0] px-2.5 py-1.5 text-xs text-[#0F172A] focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-[#0F172A] block mb-1">Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as ProjectStatus)}
+                    className="w-full rounded-lg border border-[#E2E8F0] px-2.5 py-1.5 text-xs text-[#0F172A] focus:outline-hidden"
+                  >
+                    <option value="In Progress">In Progress</option>
+                    <option value="At Risk">At Risk</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Planning">Planning</option>
+                    <option value="On Hold">On Hold</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-semibold text-[#0F172A] block mb-1">Progress Percentage: {editProgressPct}%</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={editProgressPct}
+                  onChange={(e) => setEditProgressPct(Number(e.target.value))}
+                  className="w-full accent-[#2563EB]"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-[#0F172A] block mb-1">Description / Notes</label>
+                <textarea
+                  rows={2}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full rounded-lg border border-[#E2E8F0] px-3 py-1.5 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-[#E2E8F0] pt-3 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setEditingProject(null)}
+                  className="rounded-xl border border-[#E2E8F0] px-3.5 py-2 font-semibold text-[#64748B] hover:bg-[#F8FAFC] cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-[#2563EB] px-4 py-2 font-semibold text-white hover:bg-blue-700 shadow-xs cursor-pointer"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {deletingProjectId && (
+        <ConfirmDialog
+          isOpen={!!deletingProjectId}
+          onClose={() => setDeletingProjectId(null)}
+          onConfirm={handleConfirmDelete}
+          title="Delete Project?"
+          message="Are you sure you want to permanently delete this project? Associated tasks and documents may be orphaned."
+          confirmLabel="Delete Project"
+          variant="danger"
+        />
       )}
     </div>
   );

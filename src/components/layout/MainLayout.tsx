@@ -7,6 +7,7 @@ import { Header } from "@/components/layout/Header";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { NotificationDrawer } from "@/components/layout/NotificationDrawer";
 import { FirebaseInitializer } from "@/components/FirebaseInitializer";
+import { CookieConsent } from "@/components/CookieConsent";
 import { clsx } from "clsx";
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
@@ -17,6 +18,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A]">
         <FirebaseInitializer />
+        <CookieConsent />
         {children}
       </div>
     );
@@ -25,6 +27,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex">
       <FirebaseInitializer />
+      <CookieConsent />
       <Sidebar />
       <div
         className={clsx(

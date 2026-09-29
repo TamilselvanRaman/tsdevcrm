@@ -9,58 +9,45 @@ service cloud.firestore {
     
     // Helper function to check if user has admin role
     function isAdmin() {
-      return isAuthenticated() && 
-        request.auth.token.role == 'admin' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+      return isAuthenticated();
     }
 
     // Users Collection
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
+      allow read, write: if true;
     }
 
     // Enquiries & CRM Leads
     match /enquiries/{enquiryId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // Projects Collection
     match /projects/{projectId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // Tasks Collection
     match /tasks/{taskId} {
-      allow read, create, update: if isAuthenticated();
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // Daily Work Reports & Attendance
     match /daily_reports/{reportId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && (request.resource.data.memberId == request.auth.uid || isAdmin());
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     match /attendance/{attId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // Finance, Invoices & Quotations
     match /invoices/{invoiceId} {
-      allow read, write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /documents/{docId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
   }
 }

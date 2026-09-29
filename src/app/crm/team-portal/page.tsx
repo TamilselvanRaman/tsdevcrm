@@ -10,7 +10,7 @@ export default function CrmTeamPortalRedirect() {
 
   useEffect(() => {
     setPortalMode("team_member");
-    router.replace("/team-portal/my-tasks");
+    router.replace("/crm/member/my-tasks");
   }, [router, setPortalMode]);
 
   return (

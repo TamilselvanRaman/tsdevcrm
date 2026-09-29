@@ -20,18 +20,30 @@ import {
   Layers,
   ArrowRight,
   Sparkles,
+  Edit2,
+  Trash2,
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { Invoice, InvoiceStatus, DocumentItem } from "@/types";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { clsx } from "clsx";
 
 export default function InvoicesPage() {
-  const { invoices, addInvoice, projects } = useAppStore();
+  const { invoices, addInvoice, updateInvoice, deleteInvoice, projects } = useAppStore();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
+  const [deletingInvoice, setDeletingInvoice] = useState<Invoice | null>(null);
+  const [toastMessage, setToastMessage] = useState("");
   const [previewInvoice, setPreviewInvoice] = useState<Invoice | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(""), 3000);
+  };
 
   // Form state
   const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id || "");
@@ -62,6 +74,7 @@ export default function InvoicesPage() {
   ]);
 
   const handleOpenCreateModal = () => {
+    setEditingInvoice(null);
     const rand = Math.floor(100 + Math.random() * 900);
     const todayStr = new Date().toISOString().split("T")[0];
     const dueStr = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
@@ -96,6 +109,47 @@ export default function InvoicesPage() {
     ]);
 
     setIsAddModalOpen(true);
+  };
+
+  const handleOpenEditModal = (inv: Invoice) => {
+    setEditingInvoice(inv);
+    setInvoiceNumber(inv.invoiceNumber);
+    setIssueDate(inv.issueDate || "");
+    setDueDate(inv.dueDate || "");
+    setStatus(inv.status);
+    setTaxPercent(inv.taxPercent || 0);
+    setPaidAmountInput(inv.paidAmount || 0);
+    setClientName(inv.clientName || "");
+    setClientPhone(inv.clientPhone || "");
+    setClientEmail(inv.clientEmail || "");
+    setClientAddress(inv.clientAddress || "");
+    setProjectName(inv.projectName || "");
+    setQuotationTotal(inv.quotationTotal || inv.amount);
+    setPreviousPayment(inv.previousPayment || 0);
+    setMilestoneDescription(inv.milestoneDescription || "");
+    setNotes(inv.notes || "Thank you for your business.");
+    setItems(
+      inv.items && inv.items.length > 0
+        ? inv.items
+        : [
+            {
+              id: `item-${Date.now()}-1`,
+              description: inv.projectName,
+              deliverable: "Milestone deliverable",
+              quantity: 1,
+              rate: inv.amount,
+              amount: inv.amount,
+            },
+          ]
+    );
+    setIsAddModalOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deletingInvoice) return;
+    deleteInvoice(deletingInvoice.id);
+    setDeletingInvoice(null);
+    showToast("Invoice deleted successfully.");
   };
 
   const applyPreset = (presetType: "insurance" | "matrimony" | "studio") => {
@@ -245,6 +299,37 @@ export default function InvoicesPage() {
     e.preventDefault();
     const resolvedNum = invoiceNumber || `INV-2026-${Math.floor(100 + Math.random() * 900)}`;
 
+    if (editingInvoice) {
+      updateInvoice(editingInvoice.id, {
+        invoiceNumber: resolvedNum,
+        clientName: clientName || "Corporate Client",
+        clientEmail,
+        clientPhone,
+        clientAddress,
+        projectName: projectName || "Client Project",
+        amount: totalAmount,
+        paidAmount: Number(paidAmountInput) || 0,
+        balance,
+        dueDate: dueDate || new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
+        status,
+        issueDate: issueDate || new Date().toISOString().split("T")[0],
+        quotationTotal,
+        previousPayment,
+        thisInvoiceAmount: totalAmount,
+        balanceAfterInvoice,
+        milestoneDescription,
+        items,
+        subtotal,
+        taxPercent,
+        taxAmount,
+        notes: notes || "Thank you for your business.",
+      });
+      setIsAddModalOpen(false);
+      setEditingInvoice(null);
+      showToast("Invoice updated successfully!");
+      return;
+    }
+
     const newInv: Omit<Invoice, "id"> = {
       invoiceNumber: resolvedNum,
       clientName: clientName || "Corporate Client",
@@ -273,6 +358,7 @@ export default function InvoicesPage() {
     addInvoice(newInv);
 
     setIsAddModalOpen(false);
+    showToast("Invoice created successfully!");
   };
 
   const filteredInvoices = invoices.filter((i) => {
@@ -292,6 +378,14 @@ export default function InvoicesPage() {
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-20 right-8 z-50 flex items-center gap-2 rounded-xl bg-[#0F172A] px-4 py-3 text-xs font-semibold text-white shadow-xl animate-in fade-in slide-in-from-top-2">
+          <CheckCircle2 className="h-4 w-4 text-[#16A34A]" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -389,8 +483,14 @@ export default function InvoicesPage() {
             <tbody className="divide-y divide-[#F1F5F9]">
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-xs text-[#64748B]">
-                    No invoices found. Click "+ Create Invoice" above.
+                  <td colSpan={9} className="py-12 text-center">
+                    <EmptyState
+                      icon={FileText}
+                      title="No invoices found"
+                      description="Create milestone or project invoices to bill clients and track payments."
+                      actionLabel="+ Create Invoice"
+                      onAction={handleOpenCreateModal}
+                    />
                   </td>
                 </tr>
               ) : (
@@ -445,6 +545,22 @@ export default function InvoicesPage() {
                         </button>
                         <button
                           type="button"
+                          onClick={() => handleOpenEditModal(inv)}
+                          className="p-1.5 rounded-lg border border-[#E2E8F0] bg-white text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 transition-colors cursor-pointer"
+                          title="Edit Invoice"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeletingInvoice(inv)}
+                          className="p-1.5 rounded-lg border border-red-200 bg-red-50 text-[#DC2626] hover:bg-red-100 transition-colors cursor-pointer"
+                          title="Delete Invoice"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => {
                             setPreviewInvoice(inv);
                             setTimeout(() => window.print(), 300);
@@ -478,14 +594,21 @@ export default function InvoicesPage() {
           >
             <div className="flex items-center justify-between border-b border-[#E2E8F0] px-6 py-4 bg-[#F8FAFC] shrink-0">
               <div>
-                <h3 className="font-bold text-base text-[#0F172A]">Create Client Invoice</h3>
+                <h3 className="font-bold text-base text-[#0F172A]">
+                  {editingInvoice ? "Edit Client Invoice" : "Create Client Invoice"}
+                </h3>
                 <p className="text-xs text-[#64748B]">
-                  TS DEV Standard Invoice format matching official company structure.
+                  {editingInvoice
+                    ? "Update milestone deliverables, billing breakdown and payment details."
+                    : "TS DEV Standard Invoice format matching official company structure."}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={() => {
+                  setIsAddModalOpen(false);
+                  setEditingInvoice(null);
+                }}
                 className="rounded-lg p-1.5 text-[#64748B] hover:bg-[#F8FAFC] cursor-pointer"
               >
                 <X className="h-4 w-4" />
@@ -779,7 +902,10 @@ export default function InvoicesPage() {
                 <div className="flex items-center justify-end gap-2 border-t border-[#E2E8F0] pt-4 mt-6">
                   <button
                     type="button"
-                    onClick={() => setIsAddModalOpen(false)}
+                    onClick={() => {
+                      setIsAddModalOpen(false);
+                      setEditingInvoice(null);
+                    }}
                     className="rounded-xl border border-[#E2E8F0] px-4 py-2 text-xs font-semibold text-[#64748B] hover:bg-slate-200/60 cursor-pointer"
                   >
                     Cancel
@@ -789,7 +915,7 @@ export default function InvoicesPage() {
                     className="flex items-center gap-1.5 rounded-xl bg-[#2563EB] px-5 py-2 text-xs font-bold text-white hover:bg-blue-700 shadow-xs transition-all cursor-pointer"
                   >
                     <CheckCircle2 className="h-4 w-4" />
-                    <span>Issue & Generate PDF</span>
+                    <span>{editingInvoice ? "Save Invoice Changes" : "Issue & Generate PDF"}</span>
                   </button>
                 </div>
               </form>
@@ -838,13 +964,18 @@ export default function InvoicesPage() {
             <div className="border border-slate-200 rounded-xl p-8 sm:p-10 space-y-6 text-[#0F172A] bg-white print:border-none print:p-0 print:shadow-none shadow-xs">
               {/* Header */}
               <div className="flex items-start justify-between">
-                <div>
-                  <h1 className="text-2xl font-black tracking-tight text-[#0F172A]">TS DEV</h1>
-                  <p className="text-xs font-medium text-[#475569] mt-0.5">Digital Solutions & Development</p>
-                  <p className="text-xs text-[#64748B]">Dharmapuri, Tamil Nadu, India</p>
-                  <p className="text-xs text-[#2563EB] font-medium mt-0.5">
-                    Ceittamilselvanr26@gmail.com · +91 9944287852
-                  </p>
+                <div className="flex items-start gap-3.5">
+                  <div className="h-14 w-14 rounded-xl bg-slate-950 overflow-hidden border border-slate-800 shrink-0 p-1.5 shadow-xs flex items-center justify-center">
+                    <img src="/logo-removebg.png" alt="TS DEV Logo" className="h-full w-full object-contain filter drop-shadow-[0_0_8px_rgba(37,99,235,0.4)]" />
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-black tracking-tight text-[#0F172A]">TS DEV</h1>
+                    <p className="text-xs font-medium text-[#475569] mt-0.5">Digital Solutions & Development</p>
+                    <p className="text-xs text-[#64748B]">Dharmapuri, Tamil Nadu, India</p>
+                    <p className="text-xs text-[#2563EB] font-medium mt-0.5">
+                      Ceittamilselvanr26@gmail.com · +91 9944287852
+                    </p>
+                  </div>
                 </div>
                 <div className="text-right">
                   <h2 className="text-2xl font-black tracking-wider text-[#0F172A]">INVOICE</h2>
@@ -1049,10 +1180,15 @@ export default function InvoicesPage() {
                 <div>
                   <p className="font-bold text-[#2563EB] text-xs">Thank you for your business.</p>
                 </div>
-                <div className="text-right space-y-4">
-                  <div className="font-bold text-xs text-[#0F172A]">For TS DEV</div>
-                  <div className="pt-8 text-[11px] text-[#64748B] font-medium border-t border-slate-300">
-                    Authorized Signature
+                <div className="flex flex-col items-end space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="h-7 w-7 rounded-lg bg-slate-950 p-1 border border-slate-800 flex items-center justify-center">
+                      <img src="/logo-removebg.png" alt="TS DEV Seal" className="h-full w-full object-contain" />
+                    </div>
+                    <div className="font-bold text-xs text-[#0F172A]">For TS DEV</div>
+                  </div>
+                  <div className="pt-4 text-[11px] text-[#64748B] font-medium border-t border-slate-300 w-36 text-center">
+                    Authorized Signatory
                   </div>
                 </div>
               </div>
@@ -1060,6 +1196,17 @@ export default function InvoicesPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Invoice Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!deletingInvoice}
+        title="Delete Invoice"
+        message={`Are you sure you want to permanently delete invoice "${deletingInvoice?.invoiceNumber}" for ${deletingInvoice?.clientName}?`}
+        confirmLabel="Delete Invoice"
+        variant="danger"
+        onConfirm={handleDeleteConfirm}
+        onClose={() => setDeletingInvoice(null)}
+      />
     </div>
   );
 }

@@ -90,8 +90,10 @@ export function CommandPalette() {
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-slate-950/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
       <div className="w-full max-w-2xl rounded-2xl border border-[#E2E8F0] bg-white shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
         {/* Search Header */}
-        <div className="flex items-center border-b border-[#E2E8F0] px-4 py-3 gap-3">
-          <Search className="h-5 w-5 text-[#64748B] shrink-0" />
+        <div className="flex items-center border-b border-[#E2E8F0] px-4 py-3 gap-3 bg-[#F8FAFC]">
+          <div className="h-6 w-6 rounded-md bg-slate-950 overflow-hidden border border-slate-800 p-0.5 flex items-center justify-center shrink-0">
+            <img src="/logo-removebg.png" alt="TS DEV" className="h-full w-full object-contain" />
+          </div>
           <input
             type="text"
             value={query}
@@ -102,7 +104,7 @@ export function CommandPalette() {
           />
           <button
             onClick={() => setCommandPaletteOpen(false)}
-            className="rounded-lg p-1 text-[#64748B] hover:bg-[#F8FAFC] hover:text-[#0F172A]"
+            className="rounded-lg p-1 text-[#64748B] hover:bg-slate-200 hover:text-[#0F172A]"
           >
             <X className="h-4 w-4" />
           </button>

@@ -16,6 +16,11 @@ import {
   UserTeam,
   ProjectDocument,
   ProjectDocumentStatus,
+  ClientRecord,
+  ExpenseRecord,
+  NoteItem,
+  NoticeItem,
+  FollowUpItem,
 } from "@/types";
 import {
   INITIAL_USERS,
@@ -44,17 +49,65 @@ import {
   saveUser,
   subscribeDailyReports,
   saveDailyReport,
+  deleteDailyReport,
   subscribeAttendance,
   saveAttendance,
+  deleteAttendance,
   subscribeInvoices,
   saveInvoice,
+  deleteInvoice,
   subscribeDocuments,
   saveDocument,
   deleteDocument as deleteFirestoreDocument,
-  seedFirestoreIfEmpty,
+  subscribeClients,
+  saveClient,
+  deleteClient,
+  subscribeExpenses,
+  saveExpense,
+  deleteExpense,
+  subscribeNotes,
+  saveNote,
+  deleteNote,
+  subscribeNotices,
+  saveNotice,
+  deleteNotice,
+  subscribeFollowUps,
+  saveFollowUp,
+  deleteFollowUp,
+  subscribeTeams,
+  saveTeam,
+  deleteTeam,
 } from "@/lib/firebaseService";
 
 export type PortalMode = "admin" | "team_member";
+
+export const SYSTEM_FALLBACK_USER: User = {
+  id: "usr-admin-1",
+  fullName: "Tamil Selvan R",
+  email: "ceittamilselvanr@gmail.com",
+  username: "tamilselvanr",
+  phone: "+91 98765 43210",
+  role: "Admin",
+  team: "Management",
+  avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+  status: "Active",
+  lastActive: "Just now",
+  permissions: {
+    viewTasks: true,
+    createTasks: true,
+    editTasks: true,
+    updateStatus: true,
+    submitWork: true,
+    viewAssignedProjects: true,
+    viewProjectDetails: true,
+    submitDailyReport: true,
+    checkIn: true,
+    checkOut: true,
+    viewFinance: true,
+    manageUsers: true,
+    systemSettings: true,
+  },
+};
 
 interface AppState {
   // Auth & Portal State
@@ -64,7 +117,7 @@ interface AppState {
 
   setPortalMode: (mode: PortalMode) => void;
   setCurrentUserId: (id: string) => void;
-  loginAsAdmin: () => void;
+  loginAsAdmin: (userId?: string) => void;
   loginAsTeamMember: (userId: string) => void;
   logout: () => void;
 
@@ -93,54 +146,108 @@ interface AppState {
   payments: PaymentRecord[];
   notifications: NotificationItem[];
   documents: ProjectDocument[];
+  clients: ClientRecord[];
+  expenses: ExpenseRecord[];
+  notes: NoteItem[];
+  notices: NoticeItem[];
+  followUps: FollowUpItem[];
 
   // Actions - Documents
   addDocument: (doc: Omit<ProjectDocument, "id">) => void;
+  updateDocument: (id: string, updates: Partial<ProjectDocument>) => void;
   updateDocumentStatus: (id: string, status: ProjectDocumentStatus) => void;
   deleteDocument: (id: string) => void;
 
   // Actions - Enquiries
   addEnquiry: (enquiry: Omit<Enquiry, "id" | "createdDate" | "activities" | "notes" | "files">) => void;
+  updateEnquiry: (id: string, updates: Partial<Enquiry>) => void;
   updateEnquiryStatus: (id: string, status: Enquiry["status"]) => void;
   assignEnquiry: (id: string, memberId: string, memberName: string) => void;
   addEnquiryNote: (id: string, text: string, author: string) => void;
+  deleteEnquiry: (id: string) => void;
 
   // Actions - Projects
   addProject: (project: Omit<Project, "id">) => void;
+  updateProject: (id: string, updates: Partial<Project>) => void;
   updateProjectStatus: (id: string, status: Project["status"]) => void;
+  deleteProject: (id: string) => void;
 
   // Actions - Tasks
   addTask: (task: Omit<Task, "id" | "taskKey" | "checklist" | "comments" | "attachments" | "activities" | "actualHours">) => void;
+  createTask: (task: Omit<Task, "id" | "taskKey" | "checklist" | "comments" | "attachments" | "activities" | "actualHours">) => void;
+  updateTask: (id: string, updates: Partial<Task>) => void;
   updateTaskStatus: (id: string, status: TaskStatus) => void;
   toggleTaskBlock: (id: string, reason?: string) => void;
   toggleChecklistItem: (taskId: string, itemId: string) => void;
   addChecklistItem: (taskId: string, text: string) => void;
   assignTask: (taskId: string, userId: string, userName: string, userAvatar: string) => void;
   addComment: (taskId: string, commentText: string) => void;
+  deleteTask: (id: string) => void;
 
   // Actions - Team & Users
   addUser: (user: Omit<User, "id" | "lastActive">) => void;
+  updateUser: (userId: string, updates: Partial<User>) => void;
   updateUserPermissions: (userId: string, permissions: UserPermissions) => void;
   toggleUserStatus: (userId: string) => void;
   deleteUser: (userId: string) => void;
 
   // Actions - Teams Structure
   addTeam: (team: Omit<TeamGroup, "id">) => void;
+  updateTeam: (id: string, updates: Partial<TeamGroup>) => void;
+  deleteTeam: (id: string) => void;
 
   // Actions - Daily Work
   submitDailyReport: (report: Omit<DailyWorkReport, "id" | "submittedAt" | "submitted">) => void;
+  updateDailyReport: (id: string, updates: Partial<DailyWorkReport>) => void;
+  updateDailyReportStatus: (id: string, status: DailyWorkReport["status"]) => void;
+  deleteDailyReport: (id: string) => void;
 
   // Actions - Attendance
   checkIn: (memberId: string) => void;
   startBreak: (memberId: string) => void;
   endBreak: (memberId: string) => void;
   checkOut: (memberId: string) => void;
+  recordAttendance: (record: AttendanceRecord) => void;
+  updateAttendance: (id: string, updates: Partial<AttendanceRecord>) => void;
+  deleteAttendance: (id: string) => void;
 
   // Actions - Invoices
   addInvoice: (invoice: Omit<Invoice, "id">) => void;
+  updateInvoice: (id: string, updates: Partial<Invoice>) => void;
+  deleteInvoice: (id: string) => void;
+
+  // Actions - Clients
+  addClient: (client: Omit<ClientRecord, "id">) => void;
+  updateClient: (id: string, updates: Partial<ClientRecord>) => void;
+  deleteClient: (id: string) => void;
+
+  // Actions - Expenses
+  addExpense: (expense: Omit<ExpenseRecord, "id">) => void;
+  updateExpense: (id: string, updates: Partial<ExpenseRecord>) => void;
+  deleteExpense: (id: string) => void;
+
+  // Actions - Notes
+  addNote: (note: Omit<NoteItem, "id">) => void;
+  updateNote: (id: string, updates: Partial<NoteItem>) => void;
+  deleteNote: (id: string) => void;
+  togglePinNote: (id: string) => void;
+
+  // Actions - Notices
+  addNotice: (notice: Omit<NoticeItem, "id">) => void;
+  updateNotice: (id: string, updates: Partial<NoticeItem>) => void;
+  deleteNotice: (id: string) => void;
+  acknowledgeNotice: (id: string) => void;
+
+  // Actions - Follow-ups
+  addFollowUp: (followUp: Omit<FollowUpItem, "id">) => void;
+  updateFollowUp: (id: string, updates: Partial<FollowUpItem>) => void;
+  deleteFollowUp: (id: string) => void;
 
   // Actions - Notifications
   markNotificationRead: (id: string) => void;
+  markAllNotificationsRead: () => void;
+  deleteNotification: (id: string) => void;
+  clearAllNotifications: () => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -151,12 +258,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setPortalMode: (mode) => set({ portalMode: mode }),
   setCurrentUserId: (id) => set({ currentUserId: id }),
 
-  loginAsAdmin: () =>
-    set({
+  loginAsAdmin: (userId?: string) =>
+    set((state) => ({
       isAuthenticated: true,
       portalMode: "admin",
-      currentUserId: "usr-001",
-    }),
+      currentUserId: userId || state.currentUserId || "usr-001",
+    })),
 
   loginAsTeamMember: (userId) =>
     set({
@@ -181,9 +288,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   firebaseSynced: false,
 
   initFirebaseSync: () => {
-    // Attempt auto-seed if newly created database
-    seedFirestoreIfEmpty().catch(() => {});
-
     // Real-time Firestore Subscriptions
     const unsubEnquiries = subscribeEnquiries((list) => {
       if (list !== undefined && list !== null) set({ enquiries: list });
@@ -195,7 +299,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (list !== undefined && list !== null) set({ tasks: list });
     });
     const unsubUsers = subscribeUsers((list) => {
-      if (list && list.length > 0) set({ users: list });
+      if (list !== undefined && list !== null) set({ users: list });
     });
     const unsubReports = subscribeDailyReports((list) => {
       if (list !== undefined && list !== null) set({ dailyReports: list });
@@ -209,6 +313,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     const unsubDocuments = subscribeDocuments((list) => {
       if (list !== undefined && list !== null) set({ documents: list });
     });
+    const unsubClients = subscribeClients((list) => {
+      if (list !== undefined && list !== null) set({ clients: list });
+    });
+    const unsubExpenses = subscribeExpenses((list) => {
+      if (list !== undefined && list !== null) set({ expenses: list });
+    });
+    const unsubNotes = subscribeNotes((list) => {
+      if (list !== undefined && list !== null) set({ notes: list });
+    });
+    const unsubNotices = subscribeNotices((list) => {
+      if (list !== undefined && list !== null) set({ notices: list });
+    });
+    const unsubFollowUps = subscribeFollowUps((list) => {
+      if (list !== undefined && list !== null) set({ followUps: list });
+    });
+    const unsubTeams = subscribeTeams((list) => {
+      if (list !== undefined && list !== null) set({ teams: list });
+    });
 
     set({ firebaseSynced: true });
 
@@ -221,6 +343,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       unsubAttendance();
       unsubInvoices();
       unsubDocuments();
+      unsubClients();
+      unsubExpenses();
+      unsubNotes();
+      unsubNotices();
+      unsubFollowUps();
+      unsubTeams();
     };
   },
 
@@ -235,6 +363,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   payments: INITIAL_PAYMENTS,
   notifications: INITIAL_NOTIFICATIONS,
   documents: INITIAL_PROJECT_DOCUMENTS,
+  clients: [],
+  expenses: [],
+  notes: [],
+  notices: [],
+  followUps: [],
 
   // Document Actions
   addDocument: (docData) => {
@@ -258,6 +391,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       ],
     }));
     saveDocument(newDoc).catch(() => {});
+  },
+
+  updateDocument: (id, updates) => {
+    const docObj = get().documents.find((d) => d.id === id);
+    if (docObj) {
+      const updated = { ...docObj, ...updates };
+      set((s) => ({
+        documents: s.documents.map((d) => (d.id === id ? updated : d)),
+      }));
+      saveDocument(updated).catch(() => {});
+    }
   },
 
   updateDocumentStatus: (id, status) => {
@@ -298,6 +442,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
     set((s) => ({ enquiries: [newEnq, ...s.enquiries] }));
     saveEnquiry(newEnq).catch(() => {});
+  },
+
+  updateEnquiry: (id, updates) => {
+    set((s) => ({
+      enquiries: s.enquiries.map((e) => {
+        if (e.id === id) {
+          const updated = { ...e, ...updates };
+          saveEnquiry(updated).catch(() => {});
+          return updated;
+        }
+        return e;
+      }),
+    }));
   },
 
   updateEnquiryStatus: (id, status) => {
@@ -363,6 +520,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
 
+  deleteEnquiry: (id) => {
+    set((s) => ({
+      enquiries: s.enquiries.filter((e) => e.id !== id),
+    }));
+    deleteEnquiry(id).catch(() => {});
+  },
+
   // Project Actions
   addProject: (projectData) => {
     const newId = `prj-${Math.floor(100 + Math.random() * 900)}`;
@@ -372,6 +536,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
     set((s) => ({ projects: [newPrj, ...s.projects] }));
     saveProject(newPrj).catch(() => {});
+  },
+
+  updateProject: (id, updates) => {
+    set((s) => ({
+      projects: s.projects.map((p) => {
+        if (p.id === id) {
+          const updated = { ...p, ...updates };
+          saveProject(updated).catch(() => {});
+          return updated;
+        }
+        return p;
+      }),
+    }));
   },
 
   updateProjectStatus: (id, status) => {
@@ -385,6 +562,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         return p;
       }),
     }));
+  },
+
+  deleteProject: (id) => {
+    set((s) => ({
+      projects: s.projects.filter((p) => p.id !== id),
+    }));
+    deleteProject(id).catch(() => {});
   },
 
   // Task Actions
@@ -421,6 +605,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       ],
     }));
     saveTask(newTask).catch(() => {});
+  },
+
+  createTask: (task) => {
+    get().addTask(task);
   },
 
   updateTaskStatus: (id, status) => {
@@ -559,6 +747,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
 
+  updateTask: (id, updates) => {
+    set((s) => ({
+      tasks: s.tasks.map((t) => {
+        if (t.id === id) {
+          const updated = { ...t, ...updates };
+          saveTask(updated).catch(() => {});
+          return updated;
+        }
+        return t;
+      }),
+    }));
+  },
+
+  deleteTask: (id) => {
+    set((s) => ({
+      tasks: s.tasks.filter((t) => t.id !== id),
+    }));
+    deleteTask(id).catch(() => {});
+  },
+
   // Users & Team
   addUser: (userData) => {
     const num = Math.floor(10 + Math.random() * 90);
@@ -569,6 +777,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
     set((s) => ({ users: [...s.users, newUser] }));
     saveUser(newUser).catch(() => {});
+  },
+
+  updateUser: (userId, updates) => {
+    set((s) => ({
+      users: s.users.map((u) => {
+        if (u.id === userId) {
+          const updated = { ...u, ...updates };
+          saveUser(updated).catch(() => {});
+          return updated;
+        }
+        return u;
+      }),
+    }));
   },
 
   updateUserPermissions: (userId, permissions) => {
@@ -612,6 +833,27 @@ export const useAppStore = create<AppState>((set, get) => ({
       id: `team-${Date.now()}`,
     };
     set((s) => ({ teams: [...s.teams, newTeam] }));
+    saveTeam(newTeam).catch(() => {});
+  },
+
+  updateTeam: (id, updates) => {
+    set((s) => ({
+      teams: s.teams.map((tm) => {
+        if (tm.id === id) {
+          const updated = { ...tm, ...updates };
+          saveTeam(updated).catch(() => {});
+          return updated;
+        }
+        return tm;
+      }),
+    }));
+  },
+
+  deleteTeam: (id) => {
+    set((s) => ({
+      teams: s.teams.filter((tm) => tm.id !== id),
+    }));
+    deleteTeam(id).catch(() => {});
   },
 
   // Daily Work
@@ -638,6 +880,39 @@ export const useAppStore = create<AppState>((set, get) => ({
       ],
     }));
     saveDailyReport(newReport).catch(() => {});
+  },
+
+  updateDailyReport: (id, updates) => {
+    set((s) => ({
+      dailyReports: s.dailyReports.map((r) => {
+        if (r.id === id) {
+          const updated = { ...r, ...updates };
+          saveDailyReport(updated).catch(() => {});
+          return updated;
+        }
+        return r;
+      }),
+    }));
+  },
+
+  updateDailyReportStatus: (id, status) => {
+    set((s) => ({
+      dailyReports: s.dailyReports.map((r) => {
+        if (r.id === id) {
+          const updated = { ...r, status };
+          saveDailyReport(updated).catch(() => {});
+          return updated;
+        }
+        return r;
+      }),
+    }));
+  },
+
+  deleteDailyReport: (id) => {
+    set((s) => ({
+      dailyReports: s.dailyReports.filter((r) => r.id !== id),
+    }));
+    deleteDailyReport(id).catch(() => {});
   },
 
   // Attendance
@@ -717,6 +992,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
 
+  recordAttendance: (record) => {
+    set((s) => ({ attendance: [record, ...s.attendance.filter((a) => a.id !== record.id)] }));
+    saveAttendance(record).catch(() => {});
+  },
+
+  updateAttendance: (id, updates) => {
+    set((s) => ({
+      attendance: s.attendance.map((a) => {
+        if (a.id === id) {
+          const updated = { ...a, ...updates };
+          saveAttendance(updated).catch(() => {});
+          return updated;
+        }
+        return a;
+      }),
+    }));
+  },
+
+  deleteAttendance: (id) => {
+    set((s) => ({
+      attendance: s.attendance.filter((a) => a.id !== id),
+    }));
+    deleteAttendance(id).catch(() => {});
+  },
+
   // Invoices
   addInvoice: (data) => {
     const num = Math.floor(100 + Math.random() * 900);
@@ -732,10 +1032,226 @@ export const useAppStore = create<AppState>((set, get) => ({
     saveInvoice(newInv).catch(() => {});
   },
 
+  updateInvoice: (id, updates) => {
+    set((s) => ({
+      invoices: s.invoices.map((inv) => {
+        if (inv.id === id) {
+          const updated = { ...inv, ...updates };
+          saveInvoice(updated).catch(() => {});
+          return updated;
+        }
+        return inv;
+      }),
+    }));
+  },
+
+  deleteInvoice: (id) => {
+    set((s) => ({
+      invoices: s.invoices.filter((inv) => inv.id !== id),
+    }));
+    deleteInvoice(id).catch(() => {});
+  },
+
+  // Clients Actions
+  addClient: (clientData) => {
+    const newClient: ClientRecord = {
+      ...clientData,
+      id: `cli-${Date.now()}`,
+      createdAt: new Date().toISOString().split("T")[0],
+    };
+    set((s) => ({ clients: [newClient, ...s.clients] }));
+    saveClient(newClient).catch(() => {});
+  },
+
+  updateClient: (id, updates) => {
+    set((s) => ({
+      clients: s.clients.map((c) => {
+        if (c.id === id) {
+          const updated = { ...c, ...updates };
+          saveClient(updated).catch(() => {});
+          return updated;
+        }
+        return c;
+      }),
+    }));
+  },
+
+  deleteClient: (id) => {
+    set((s) => ({
+      clients: s.clients.filter((c) => c.id !== id),
+    }));
+    deleteClient(id).catch(() => {});
+  },
+
+  // Expenses Actions
+  addExpense: (expenseData) => {
+    const newExp: ExpenseRecord = {
+      ...expenseData,
+      id: `exp-${Date.now()}`,
+    };
+    set((s) => ({ expenses: [newExp, ...s.expenses] }));
+    saveExpense(newExp).catch(() => {});
+  },
+
+  updateExpense: (id, updates) => {
+    set((s) => ({
+      expenses: s.expenses.map((e) => {
+        if (e.id === id) {
+          const updated = { ...e, ...updates };
+          saveExpense(updated).catch(() => {});
+          return updated;
+        }
+        return e;
+      }),
+    }));
+  },
+
+  deleteExpense: (id) => {
+    set((s) => ({
+      expenses: s.expenses.filter((e) => e.id !== id),
+    }));
+    deleteExpense(id).catch(() => {});
+  },
+
+  // Notes Actions
+  addNote: (noteData) => {
+    const newNote: NoteItem = {
+      ...noteData,
+      id: `not-${Date.now()}`,
+      date: new Date().toISOString().split("T")[0],
+    };
+    set((s) => ({ notes: [newNote, ...s.notes] }));
+    saveNote(newNote).catch(() => {});
+  },
+
+  updateNote: (id, updates) => {
+    set((s) => ({
+      notes: s.notes.map((n) => {
+        if (n.id === id) {
+          const updated = { ...n, ...updates };
+          saveNote(updated).catch(() => {});
+          return updated;
+        }
+        return n;
+      }),
+    }));
+  },
+
+  deleteNote: (id) => {
+    set((s) => ({
+      notes: s.notes.filter((n) => n.id !== id),
+    }));
+    deleteNote(id).catch(() => {});
+  },
+
+  togglePinNote: (id) => {
+    set((s) => ({
+      notes: s.notes.map((n) => {
+        if (n.id === id) {
+          const updated = { ...n, isPinned: !n.isPinned };
+          saveNote(updated).catch(() => {});
+          return updated;
+        }
+        return n;
+      }),
+    }));
+  },
+
+  // Notices Actions
+  addNotice: (noticeData) => {
+    const newNotice: NoticeItem = {
+      ...noticeData,
+      id: `notice-${Date.now()}`,
+      publishedDate: new Date().toISOString().split("T")[0],
+      acknowledgements: 0,
+    };
+    set((s) => ({ notices: [newNotice, ...s.notices] }));
+    saveNotice(newNotice).catch(() => {});
+  },
+
+  updateNotice: (id, updates) => {
+    set((s) => ({
+      notices: s.notices.map((n) => {
+        if (n.id === id) {
+          const updated = { ...n, ...updates };
+          saveNotice(updated).catch(() => {});
+          return updated;
+        }
+        return n;
+      }),
+    }));
+  },
+
+  deleteNotice: (id) => {
+    set((s) => ({
+      notices: s.notices.filter((n) => n.id !== id),
+    }));
+    deleteNotice(id).catch(() => {});
+  },
+
+  acknowledgeNotice: (id) => {
+    set((s) => ({
+      notices: s.notices.map((n) => {
+        if (n.id === id) {
+          const updated = { ...n, acknowledgements: n.acknowledgements + 1 };
+          saveNotice(updated).catch(() => {});
+          return updated;
+        }
+        return n;
+      }),
+    }));
+  },
+
+  // Follow-ups Actions
+  addFollowUp: (followUpData) => {
+    const newFollowUp: FollowUpItem = {
+      ...followUpData,
+      id: `fol-${Date.now()}`,
+    };
+    set((s) => ({ followUps: [newFollowUp, ...s.followUps] }));
+    saveFollowUp(newFollowUp).catch(() => {});
+  },
+
+  updateFollowUp: (id, updates) => {
+    set((s) => ({
+      followUps: s.followUps.map((f) => {
+        if (f.id === id) {
+          const updated = { ...f, ...updates };
+          saveFollowUp(updated).catch(() => {});
+          return updated;
+        }
+        return f;
+      }),
+    }));
+  },
+
+  deleteFollowUp: (id) => {
+    set((s) => ({
+      followUps: s.followUps.filter((f) => f.id !== id),
+    }));
+    deleteFollowUp(id).catch(() => {});
+  },
+
   // Notifications
   markNotificationRead: (id) => {
     set((s) => ({
       notifications: s.notifications.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
     }));
+  },
+
+  markAllNotificationsRead: () => {
+    set((s) => ({
+      notifications: s.notifications.map((n) => ({ ...n, isRead: true })),
+    }));
+  },
+
+  deleteNotification: (id) => {
+    set((s) => ({
+      notifications: s.notifications.filter((n) => n.id !== id),
+    }));
+  },
+
+  clearAllNotifications: () => {
+    set({ notifications: [] });
   },
 }));

@@ -17,12 +17,16 @@ import {
   Layers,
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
-import { UserTeam } from "@/types";
+import { UserTeam, TeamGroup } from "@/types";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export default function TeamsManagementPage() {
-  const { teams, users, addTeam } = useAppStore();
+  const { teams, users, addTeam, updateTeam, deleteTeam } = useAppStore();
 
   const [isAddTeamModalOpen, setIsAddTeamModalOpen] = useState(false);
+  const [editingTeam, setEditingTeam] = useState<TeamGroup | null>(null);
+  const [deletingTeam, setDeletingTeam] = useState<TeamGroup | null>(null);
   const [teamName, setTeamName] = useState<string>("Marketing");
   const [isCustomName, setIsCustomName] = useState(false);
   const [customNameInput, setCustomNameInput] = useState("");
@@ -37,6 +41,7 @@ export default function TeamsManagementPage() {
   };
 
   const handleOpenCreateModal = () => {
+    setEditingTeam(null);
     if (users.length > 0) {
       setTeamLeadId(users[0].id);
       setSelectedMemberIds([users[0].id]);
@@ -46,6 +51,24 @@ export default function TeamsManagementPage() {
     setCustomNameInput("");
     setDescription("");
     setIsAddTeamModalOpen(true);
+  };
+
+  const handleOpenEditModal = (t: TeamGroup) => {
+    setEditingTeam(t);
+    setTeamName(t.name);
+    setIsCustomName(false);
+    setCustomNameInput("");
+    setTeamLeadId(t.teamLeadId);
+    setSelectedMemberIds(t.memberIds || []);
+    setDescription(t.description || "");
+    setIsAddTeamModalOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deletingTeam) return;
+    deleteTeam(deletingTeam.id);
+    setDeletingTeam(null);
+    showToast("Department team removed.");
   };
 
   const toggleMemberSelection = (memberId: string) => {
@@ -66,10 +89,25 @@ export default function TeamsManagementPage() {
 
     const allMemberIds = Array.from(new Set([leadId, ...selectedMemberIds]));
 
+    if (editingTeam) {
+      updateTeam(editingTeam.id, {
+        name: finalName as UserTeam,
+        teamLeadId: leadId,
+        teamLeadName: lead?.fullName || "Tamil Selvan",
+        memberIds: allMemberIds,
+        description: description.trim() || `${finalName} department & operations team.`,
+      });
+      setIsAddTeamModalOpen(false);
+      setEditingTeam(null);
+      setDescription("");
+      showToast(`Team "${finalName}" updated successfully!`);
+      return;
+    }
+
     addTeam({
       name: finalName as UserTeam,
       teamLeadId: leadId,
-      teamLeadName: lead?.fullName || "Tamil Selvan",
+      teamLeadName: lead?.fullName || "Team Lead",
       memberIds: allMemberIds,
       description: description.trim() || `${finalName} department & operations team.`,
     });
@@ -116,66 +154,94 @@ export default function TeamsManagementPage() {
       </div>
 
       {/* Teams Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {teams.map((t) => {
-          const teamMembers = users.filter(
-            (u) =>
-              u.team.toLowerCase() === t.name.toLowerCase() ||
-              (t.memberIds && t.memberIds.includes(u.id))
-          );
+      {teams.length === 0 ? (
+        <EmptyState
+          icon={Briefcase}
+          title="No department teams configured"
+          description="Create department teams to assign team leads, organize developers and designers, and manage role access."
+          actionLabel="+ Create Team"
+          onAction={handleOpenCreateModal}
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {teams.map((t) => {
+            const teamMembers = users.filter(
+              (u) =>
+                u.team.toLowerCase() === t.name.toLowerCase() ||
+                (t.memberIds && t.memberIds.includes(u.id))
+            );
 
-          return (
-            <div
-              key={t.id}
-              className="rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-2xs space-y-3 hover:shadow-md hover:border-[#2563EB]/40 transition-all flex flex-col justify-between"
-            >
-              <div className="space-y-2">
-                <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-[#2563EB]">
-                      <Briefcase className="h-4 w-4" />
+            return (
+              <div
+                key={t.id}
+                className="rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-2xs space-y-3 hover:shadow-md hover:border-[#2563EB]/40 transition-all flex flex-col justify-between"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-[#2563EB]">
+                        <Briefcase className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-sm text-[#0F172A]">{t.name} Team</h3>
+                        <span className="text-[11px] text-[#64748B]">Lead: {t.teamLeadName}</span>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-bold text-sm text-[#0F172A]">{t.name} Team</h3>
-                      <span className="text-[11px] text-[#64748B]">Lead: {t.teamLeadName}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-[#2563EB] border border-blue-200">
+                        {teamMembers.length} Members
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditModal(t)}
+                        className="p-1 rounded text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 transition-colors cursor-pointer"
+                        title="Edit Team"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeletingTeam(t)}
+                        className="p-1 rounded text-[#64748B] hover:text-[#DC2626] hover:bg-red-50 transition-colors cursor-pointer"
+                        title="Delete Team"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </div>
-                  <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[10px] font-bold text-[#2563EB] border border-blue-200">
-                    {teamMembers.length} Members
+
+                  <p className="text-xs text-[#64748B] leading-relaxed">{t.description}</p>
+                </div>
+
+                <div className="pt-3 border-t border-[#F1F5F9] space-y-2">
+                  <span className="text-[11px] font-semibold text-[#0F172A] block">
+                    Assigned Team Members:
                   </span>
-                </div>
-
-                <p className="text-xs text-[#64748B] leading-relaxed">{t.description}</p>
-              </div>
-
-              <div className="pt-3 border-t border-[#F1F5F9] space-y-2">
-                <span className="text-[11px] font-semibold text-[#0F172A] block">
-                  Assigned Team Members:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {teamMembers.length === 0 ? (
-                    <span className="text-[11px] text-[#94A3B8]">Lead assigned ({t.teamLeadName})</span>
-                  ) : (
-                    teamMembers.map((m) => (
-                      <div
-                        key={m.id}
-                        className="flex items-center gap-1.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] px-2 py-1 text-[11px] font-medium text-[#0F172A]"
-                      >
-                        <img
-                          src={m.avatarUrl}
-                          alt={m.fullName}
-                          className="h-4 w-4 rounded-full object-cover"
-                        />
-                        <span>{m.fullName}</span>
-                      </div>
-                    ))
-                  )}
+                  <div className="flex flex-wrap gap-1.5">
+                    {teamMembers.length === 0 ? (
+                      <span className="text-[11px] text-[#94A3B8]">Lead assigned ({t.teamLeadName})</span>
+                    ) : (
+                      teamMembers.map((m) => (
+                        <div
+                          key={m.id}
+                          className="flex items-center gap-1.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] px-2 py-1 text-[11px] font-medium text-[#0F172A]"
+                        >
+                          <img
+                            src={m.avatarUrl}
+                            alt={m.fullName}
+                            className="h-4 w-4 rounded-full object-cover"
+                          />
+                          <span>{m.fullName}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* RBAC Permission Matrix */}
       <div className="rounded-xl border border-[#E2E8F0] bg-white shadow-2xs overflow-hidden space-y-4 p-5">
@@ -256,18 +322,25 @@ export default function TeamsManagementPage() {
             <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-[#2563EB]">
-                  <Plus className="h-4 w-4" />
+                  {editingTeam ? <Edit2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-[#0F172A]">Create Department Team</h3>
+                  <h3 className="font-bold text-base text-[#0F172A]">
+                    {editingTeam ? "Edit Department Team" : "Create Department Team"}
+                  </h3>
                   <p className="text-[11px] text-[#64748B]">
-                    Set up a new operational department, assign a lead and add members.
+                    {editingTeam
+                      ? "Update team details, department lead, and member allocations."
+                      : "Set up a new operational department, assign a lead and add members."}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setIsAddTeamModalOpen(false)}
+                onClick={() => {
+                  setIsAddTeamModalOpen(false);
+                  setEditingTeam(null);
+                }}
                 className="rounded-lg p-1.5 text-[#64748B] hover:bg-[#F8FAFC]"
               >
                 <X className="h-4 w-4" />
@@ -389,7 +462,10 @@ export default function TeamsManagementPage() {
               <div className="flex items-center justify-end gap-2 border-t border-[#E2E8F0] pt-3 mt-4">
                 <button
                   type="button"
-                  onClick={() => setIsAddTeamModalOpen(false)}
+                  onClick={() => {
+                    setIsAddTeamModalOpen(false);
+                    setEditingTeam(null);
+                  }}
                   className="rounded-xl border border-[#E2E8F0] px-4 py-2 font-semibold text-[#64748B] hover:bg-[#F8FAFC]"
                 >
                   Cancel
@@ -399,13 +475,24 @@ export default function TeamsManagementPage() {
                   className="flex items-center gap-1.5 rounded-xl bg-[#2563EB] px-5 py-2 font-semibold text-white hover:bg-blue-700 shadow-xs transition-colors"
                 >
                   <CheckCircle2 className="h-4 w-4" />
-                  <span>Create Team</span>
+                  <span>{editingTeam ? "Save Team Changes" : "Create Team"}</span>
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* Delete Team Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!deletingTeam}
+        title="Delete Department Team"
+        message={`Are you sure you want to permanently delete the "${deletingTeam?.name} Team"? Team members will not be deleted.`}
+        confirmLabel="Delete Team"
+        variant="danger"
+        onConfirm={handleDeleteConfirm}
+        onClose={() => setDeletingTeam(null)}
+      />
     </div>
   );
 }
