@@ -2,52 +2,94 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper function to check if user is authenticated
+    // Helper function to check if request is authenticated
     function isAuthenticated() {
       return request.auth != null;
     }
-    
-    // Helper function to check if user has admin role
-    function isAdmin() {
-      return isAuthenticated();
+
+    // Global rule to allow full read & write access across all CRM collections
+    match /{document=**} {
+      allow read, write: if true;
     }
 
-    // Users Collection
+    // 1. Users Collection
     match /users/{userId} {
-      allow read, write: if true;
+      allow read, create, update, delete: if true;
     }
 
-    // Enquiries & CRM Leads
+    // 2. Enquiries Collection
     match /enquiries/{enquiryId} {
-      allow read, write: if true;
+      allow read, create, update, delete: if true;
     }
 
-    // Projects Collection
+    // 3. Projects Collection
     match /projects/{projectId} {
-      allow read, write: if true;
+      allow read, create, update, delete: if true;
     }
 
-    // Tasks Collection
+    // 4. Tasks Collection
     match /tasks/{taskId} {
-      allow read, write: if true;
+      allow read, create, update, delete: if true;
     }
 
-    // Daily Work Reports & Attendance
+    // 5. Daily Work Reports Collection
     match /daily_reports/{reportId} {
-      allow read, write: if true;
+      allow read, create, update, delete: if true;
     }
 
-    match /attendance/{attId} {
-      allow read, write: if true;
+    // 6. Attendance Collection
+    match /attendance/{attendanceId} {
+      allow read, create, update, delete: if true;
     }
 
-    // Finance, Invoices & Quotations
+    // 7. Invoices Collection
     match /invoices/{invoiceId} {
-      allow read, write: if true;
+      allow read, create, update, delete: if true;
     }
 
-    match /documents/{docId} {
-      allow read, write: if true;
+    // 8. Payments Collection
+    match /payments/{paymentId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // 9. Documents Collection (Quotations & Agreements)
+    match /documents/{documentId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // 10. Notifications Collection
+    match /notifications/{notificationId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // 11. Clients Collection
+    match /clients/{clientId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // 12. Expenses Collection
+    match /expenses/{expenseId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // 13. Notes Collection
+    match /notes/{noteId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // 14. Notices Collection
+    match /notices/{noticeId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // 15. Follow-ups Collection
+    match /follow_ups/{followUpId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // 16. Teams Collection
+    match /teams/{teamId} {
+      allow read, create, update, delete: if true;
     }
   }
 }

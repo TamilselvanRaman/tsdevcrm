@@ -31,8 +31,14 @@ export function Modal({
         onClose();
       }
     };
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    }
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -49,7 +55,7 @@ export function Modal({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4 sm:p-6 overflow-hidden animate-in fade-in duration-150"
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -61,13 +67,13 @@ export function Modal({
       >
         {/* Header */}
         <div className="flex items-start justify-between border-b border-[#E2E8F0] px-6 py-4 bg-[#F8FAFC] shrink-0">
-          <div>
-            <h2 className="text-base font-bold text-[#0F172A] tracking-tight">{title}</h2>
-            {subtitle && <p className="text-xs text-[#64748B] mt-0.5">{subtitle}</p>}
+          <div className="flex flex-col space-y-1 pr-4">
+            <h2 className="text-base font-bold text-[#0F172A] tracking-tight leading-snug">{title}</h2>
+            {subtitle && <p className="text-xs font-normal text-[#64748B] leading-normal">{subtitle}</p>}
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-[#64748B] hover:bg-slate-200/60 hover:text-[#0F172A] transition-colors"
+            className="p-1.5 rounded-lg text-[#64748B] hover:bg-slate-200/60 hover:text-[#0F172A] transition-colors shrink-0 cursor-pointer"
           >
             <X className="h-4 w-4" />
           </button>

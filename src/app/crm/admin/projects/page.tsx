@@ -27,10 +27,12 @@ import {
   Sparkles,
   Edit2,
   Trash2,
+  Paperclip,
+  Upload,
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { ProjectStatus, Project } from "@/types";
+import { ProjectStatus, Project, ProjectFile } from "@/types";
 
 export default function ProjectListPage() {
   const router = useRouter();
@@ -56,18 +58,126 @@ export default function ProjectListPage() {
   const [editProgressPct, setEditProgressPct] = useState(0);
   const [editStatus, setEditStatus] = useState<ProjectStatus>("In Progress");
   const [editDescription, setEditDescription] = useState("");
+  const [editFiles, setEditFiles] = useState<ProjectFile[]>([]);
 
-  // Form state
+  // Create Form state
   const [projectName, setProjectName] = useState("");
   const [clientName, setClientName] = useState("");
   const [managerId, setManagerId] = useState(users[0]?.id || "");
   const [budget, setBudget] = useState("150000");
   const [deadline, setDeadline] = useState("2026-11-30");
   const [description, setDescription] = useState("");
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(""), 3000);
+  };
+
+  const handleAddFile = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    targetFiles: ProjectFile[],
+    setTargetFiles: (files: ProjectFile[]) => void
+  ) => {
+    const selected = e.target.files;
+    if (!selected || selected.length === 0) return;
+
+    if (targetFiles.length >= 2) {
+      showToast("Maximum 2 project files allowed.");
+      e.target.value = "";
+      return;
+    }
+
+    const file = selected[0];
+    const sizeFormatted =
+      file.size > 1024 * 1024
+        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+        : `${Math.round(file.size / 1024)} KB`;
+
+    const newDoc: ProjectFile = {
+      id: `doc-${Date.now()}`,
+      name: file.name,
+      size: sizeFormatted,
+      uploadedAt: new Date().toISOString().split("T")[0],
+      type: file.type || "Document",
+      url: "#",
+    };
+
+    setTargetFiles([...targetFiles, newDoc]);
+    showToast(`Attached document "${file.name}" (Max 2 files limit)`);
+    e.target.value = "";
+  };
+
+  const handleAddPresetDoc = (
+    docName: string,
+    docType: string,
+    targetFiles: ProjectFile[],
+    setTargetFiles: (files: ProjectFile[]) => void
+  ) => {
+    if (targetFiles.length >= 2) {
+      showToast("Maximum 2 project files allowed.");
+      return;
+    }
+    const newDoc: ProjectFile = {
+      id: `doc-${Date.now()}`,
+      name: docName,
+      size: "1.4 MB",
+      uploadedAt: new Date().toISOString().split("T")[0],
+      type: docType,
+      url: "#",
+    };
+    setTargetFiles([...targetFiles, newDoc]);
+    showToast(`Added requirement doc: "${docName}"`);
+  };
+
+  const handleRemoveFile = (
+    fileId: string,
+    targetFiles: ProjectFile[],
+    setTargetFiles: (files: ProjectFile[]) => void
+  ) => {
+    setTargetFiles(targetFiles.filter((f) => f.id !== fileId));
+    showToast("File removed.");
+  };
+
+  const handleDrawerFileUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    prj: Project
+  ) => {
+    const selected = e.target.files;
+    if (!selected || selected.length === 0) return;
+    const currentFiles = prj.files || [];
+    if (currentFiles.length >= 2) {
+      showToast("Maximum 2 project files allowed.");
+      e.target.value = "";
+      return;
+    }
+
+    const file = selected[0];
+    const sizeFormatted =
+      file.size > 1024 * 1024
+        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+        : `${Math.round(file.size / 1024)} KB`;
+
+    const newDoc: ProjectFile = {
+      id: `doc-${Date.now()}`,
+      name: file.name,
+      size: sizeFormatted,
+      uploadedAt: new Date().toISOString().split("T")[0],
+      type: file.type || "Document",
+      url: "#",
+    };
+
+    const updatedFiles = [...currentFiles, newDoc];
+    updateProject(prj.id, { files: updatedFiles });
+    showToast(`Attached "${file.name}" to ${prj.projectCode}`);
+    e.target.value = "";
+  };
+
+  const handleDrawerRemoveFile = (fileId: string, prj: Project) => {
+    const currentFiles = prj.files || [];
+    const updatedFiles = currentFiles.filter((f) => f.id !== fileId);
+    updateProject(prj.id, { files: updatedFiles });
+    showToast("Document removed from project.");
   };
 
   const filteredProjects = projects.filter((p) => {
@@ -107,6 +217,7 @@ export default function ProjectListPage() {
         { id: "m4", title: "QA Testing & Staging Deploy", progressPct: 0, status: "Pending" },
       ],
       description: description || `Software delivery agreement & engineering project for ${clientName}`,
+      files: projectFiles,
     };
 
     addProject(newProjectData);
@@ -120,6 +231,7 @@ export default function ProjectListPage() {
     setProjectName("");
     setClientName("");
     setDescription("");
+    setProjectFiles([]);
     showToast("Project created successfully!");
 
     // Automatically offer the Welcome & Kickoff Note PDF
@@ -141,6 +253,7 @@ export default function ProjectListPage() {
     setEditProgressPct(prj.progressPct || 0);
     setEditStatus(prj.status);
     setEditDescription(prj.description || "");
+    setEditFiles(prj.files || []);
   };
 
   const handleSaveEdit = (e: React.FormEvent) => {
@@ -159,6 +272,7 @@ export default function ProjectListPage() {
       progressPct: Number(editProgressPct) || 0,
       status: editStatus,
       description: editDescription.trim(),
+      files: editFiles,
     });
 
     showToast(`Project "${editProjectName}" updated.`);
@@ -361,20 +475,20 @@ export default function ProjectListPage() {
       {viewMode === "table" ? (
         <div className="rounded-xl border border-[#E2E8F0] bg-white shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left table-compact">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr>
-                  <th>Project</th>
-                  <th>Client</th>
-                  <th>Manager</th>
-                  <th>Team</th>
-                  <th>Progress</th>
-                  <th>Deadline</th>
-                  <th>Status (Quick Update)</th>
-                  <th className="text-right">Actions</th>
+                <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC] text-[11px] font-bold text-[#64748B] uppercase tracking-wider">
+                  <th className="py-3.5 px-4 text-left whitespace-nowrap">Project</th>
+                  <th className="py-3.5 px-4 text-left whitespace-nowrap">Client</th>
+                  <th className="py-3.5 px-4 text-left whitespace-nowrap">Manager</th>
+                  <th className="py-3.5 px-4 text-left whitespace-nowrap">Team</th>
+                  <th className="py-3.5 px-4 text-left whitespace-nowrap">Progress</th>
+                  <th className="py-3.5 px-4 text-left whitespace-nowrap">Deadline</th>
+                  <th className="py-3.5 px-4 text-left whitespace-nowrap">Status (Quick Update)</th>
+                  <th className="py-3.5 px-4 text-right whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-[#F1F5F9]">
                 {filteredProjects.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-8 text-center text-xs text-[#64748B]">
@@ -389,13 +503,13 @@ export default function ProjectListPage() {
                       <tr
                         key={prj.id}
                         onClick={() => setSelectedProjectId(prj.id)}
-                        className={`cursor-pointer transition-colors hover:bg-blue-50/40 ${
+                        className={`cursor-pointer transition-colors hover:bg-blue-50/40 align-middle ${
                           selectedProjectId === prj.id ? "bg-blue-50/70" : ""
                         }`}
                       >
-                        <td>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-[#2563EB] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-[10px] font-bold text-[#2563EB] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shrink-0">
                               {prj.projectCode}
                             </span>
                             <span className="font-semibold text-xs text-[#0F172A] hover:text-[#2563EB]">
@@ -403,17 +517,17 @@ export default function ProjectListPage() {
                             </span>
                           </div>
                         </td>
-                        <td className="text-xs text-[#64748B]">{prj.clientName}</td>
-                        <td className="text-xs font-medium text-[#0F172A]">{prj.managerName}</td>
-                        <td className="text-xs text-[#64748B]">
-                          <span className="inline-flex items-center gap-1 bg-[#F8FAFC] border border-[#E2E8F0] px-2 py-0.5 rounded text-[11px] font-semibold text-[#0F172A]">
+                        <td className="py-3.5 px-4 text-xs text-[#64748B] whitespace-nowrap font-medium">{prj.clientName}</td>
+                        <td className="py-3.5 px-4 text-xs font-semibold text-[#0F172A] whitespace-nowrap">{prj.managerName}</td>
+                        <td className="py-3.5 px-4 text-xs text-[#64748B] whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 bg-[#F8FAFC] border border-[#E2E8F0] px-2.5 py-1 rounded-lg text-[11px] font-semibold text-[#0F172A]">
                             <Users className="h-3 w-3 text-[#64748B]" />
                             {prj.teamMembers.length} Members
                           </span>
                         </td>
-                        <td>
-                          <div className="flex items-center gap-2">
-                            <div className="h-1.5 w-24 bg-slate-100 rounded-full overflow-hidden">
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2.5">
+                            <div className="h-1.5 w-24 bg-slate-100 rounded-full overflow-hidden shrink-0">
                               <div
                                 className={`h-full rounded-full transition-all duration-300 ${
                                   prj.status === "At Risk" ? "bg-[#DC2626]" : "bg-[#2563EB]"
@@ -424,12 +538,12 @@ export default function ProjectListPage() {
                             <span className="text-xs font-bold text-[#0F172A]">{prj.progressPct}%</span>
                           </div>
                         </td>
-                        <td className="text-xs text-[#64748B]">{prj.deadline}</td>
-                        <td onClick={(e) => e.stopPropagation()}>
+                        <td className="py-3.5 px-4 text-xs font-semibold text-[#64748B] whitespace-nowrap">{prj.deadline}</td>
+                        <td className="py-3.5 px-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                           <select
                             value={prj.status}
                             onChange={(e) => handleStatusChange(prj.id, e.target.value as ProjectStatus)}
-                            className={`rounded-lg border px-2 py-1 text-[11px] font-semibold focus:outline-hidden cursor-pointer shadow-2xs ${getStatusBadgeStyle(
+                            className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold focus:outline-hidden cursor-pointer shadow-2xs ${getStatusBadgeStyle(
                               prj.status
                             )}`}
                           >
@@ -440,42 +554,44 @@ export default function ProjectListPage() {
                             <option value="On Hold">On Hold</option>
                           </select>
                         </td>
-                        <td className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => setWelcomeNoteProject(prj)}
-                            className="inline-flex p-1.5 text-[#16A34A] hover:bg-emerald-50 rounded-lg transition-colors"
-                            title="View Welcome Note & PDF"
-                          >
-                            <FileText className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => setSelectedProjectId(prj.id)}
-                            className="inline-flex p-1.5 text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                            title="Quick Details Drawer"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleOpenEditModal(prj)}
-                            className="inline-flex p-1.5 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                            title="Edit Project"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => setDeletingProjectId(prj.id)}
-                            className="inline-flex p-1.5 text-[#64748B] hover:text-[#DC2626] hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                            title="Delete Project"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                          <Link
-                            href={`/crm/admin/projects/${prj.id}`}
-                            className="inline-flex p-1.5 text-[#64748B] hover:text-[#0F172A] hover:bg-slate-100 rounded-lg transition-colors"
-                            title="Open Full Workspace"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </Link>
+                        <td className="py-3.5 px-4 text-right whitespace-nowrap align-middle" onClick={(e) => e.stopPropagation()}>
+                          <div className="inline-flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => setWelcomeNoteProject(prj)}
+                              className="p-1.5 text-[#16A34A] hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                              title="View Welcome Note & PDF"
+                            >
+                              <FileText className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => setSelectedProjectId(prj.id)}
+                              className="p-1.5 text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                              title="Quick Details Drawer"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleOpenEditModal(prj)}
+                              className="p-1.5 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                              title="Edit Project"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => setDeletingProjectId(prj.id)}
+                              className="p-1.5 text-[#64748B] hover:text-[#DC2626] hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                              title="Delete Project"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                            <Link
+                              href={`/crm/admin/projects/${prj.id}`}
+                              className="p-1.5 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                              title="Open Full Workspace"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </Link>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -607,6 +723,40 @@ export default function ProjectListPage() {
                 </div>
               </div>
 
+              {/* Upstream CRM Pipeline Journey Trace Banner */}
+              <div className="p-3.5 rounded-xl bg-gradient-to-r from-blue-50/80 via-purple-50/80 to-emerald-50/80 border border-blue-200/80 space-y-2 text-xs">
+                <div className="font-bold text-[#0F172A] flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-blue-700">
+                    <Sparkles className="h-4 w-4" />
+                    CRM Pipeline Journey Audit Trace
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-200">
+                    🔒 Upstream Locked & Archived
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-1 pt-1">
+                  <div className="flex flex-col items-center">
+                    <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">1. Cold Call</span>
+                    <span className="text-[9px] text-slate-500 mt-0.5">Lead Logged</span>
+                  </div>
+                  <ArrowRight className="h-3 w-3 text-slate-400" />
+                  <div className="flex flex-col items-center">
+                    <span className="text-[10px] font-bold text-purple-800 bg-purple-100 px-2 py-0.5 rounded-full">2. Follow-Up</span>
+                    <span className="text-[9px] text-slate-500 mt-0.5">Qualified</span>
+                  </div>
+                  <ArrowRight className="h-3 w-3 text-slate-400" />
+                  <div className="flex flex-col items-center">
+                    <span className="text-[10px] font-bold text-blue-800 bg-blue-100 px-2 py-0.5 rounded-full">3. Client</span>
+                    <span className="text-[9px] text-slate-500 mt-0.5">Account Ready</span>
+                  </div>
+                  <ArrowRight className="h-3 w-3 text-slate-400" />
+                  <div className="flex flex-col items-center">
+                    <span className="text-[10px] font-bold text-emerald-900 bg-emerald-200 px-2.5 py-0.5 rounded-full border border-emerald-400">4. Project</span>
+                    <span className="text-[9px] text-emerald-800 font-bold mt-0.5">Active Section</span>
+                  </div>
+                </div>
+              </div>
+
               {/* Status & Progress Row */}
               <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-xs">
                 <div>
@@ -718,6 +868,92 @@ export default function ProjectListPage() {
                 <span className="font-bold text-[#0F172A]">Scope Overview</span>
                 <p className="text-[#64748B] leading-relaxed">{selectedProject.description}</p>
               </div>
+
+              {/* Project Requirement Documents & Design Files (Max 2 Files) */}
+              <div className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2">
+                  <span className="font-bold text-xs text-[#0F172A] flex items-center gap-1.5">
+                    <Paperclip className="h-4 w-4 text-[#2563EB]" />
+                    Project Documents & Requirements ({(selectedProject.files || []).length}/2 Max)
+                  </span>
+                  {(selectedProject.files || []).length < 2 && (
+                    <label className="cursor-pointer text-[11px] font-bold text-[#2563EB] hover:underline flex items-center gap-1">
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>Attach Document</span>
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.png,.jpg,.zip"
+                        onChange={(e) => handleDrawerFileUpload(e, selectedProject)}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {(selectedProject.files || []).length === 0 ? (
+                  <div className="p-3 text-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-xs text-slate-500 space-y-2">
+                    <p>No project documents attached yet. Store up to 2 design/requirement files describing what we do in this project.</p>
+                    <div className="flex items-center justify-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleAddPresetDoc("Project Scope & SRS Document.pdf", "PDF", selectedProject.files || [], (files) => updateProject(selectedProject.id, { files }))}
+                        className="text-blue-600 text-[11px] font-semibold hover:underline"
+                      >
+                        + Add Sample SRS Doc
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => handleAddPresetDoc("UI Architecture Mockup.png", "Image", selectedProject.files || [], (files) => updateProject(selectedProject.id, { files }))}
+                        className="text-blue-600 text-[11px] font-semibold hover:underline"
+                      >
+                        + Add Design Mockup
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {(selectedProject.files || []).map((file) => (
+                      <div
+                        key={file.id}
+                        className="flex items-center justify-between p-3 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] hover:bg-slate-100/80 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          <div className="p-2 rounded-lg bg-blue-100 text-[#2563EB] shrink-0">
+                            <FileText className="h-4 w-4" />
+                          </div>
+                          <div className="truncate">
+                            <h4 className="font-semibold text-xs text-[#0F172A] truncate">{file.name}</h4>
+                            <p className="text-[10px] text-[#64748B]">
+                              {file.size} • Uploaded {file.uploadedAt}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <a
+                            href={file.url || "#"}
+                            download={file.name}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-1.5 rounded-lg text-[#2563EB] hover:bg-blue-50 transition-colors"
+                            title="Download/View Document"
+                          >
+                            <Download className="h-4 w-4" />
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleDrawerRemoveFile(file.id, selectedProject)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            title="Remove document"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Bottom Drawer Actions */}
@@ -744,8 +980,8 @@ export default function ProjectListPage() {
 
       {/* PROJECT WELCOME & KICKOFF NOTE MODAL / PDF EXPORTER */}
       {welcomeNoteProject && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-2xs p-4 overflow-y-auto print:p-0 print:bg-white print:fixed print:inset-0">
-          <div className="w-full max-w-3xl rounded-2xl border border-[#E2E8F0] bg-white p-8 shadow-2xl space-y-6 my-8 print:border-none print:shadow-none print:p-0 print:m-0">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-2xs p-4 print:p-0 print:bg-white print:fixed print:inset-0">
+          <div className="w-full max-w-3xl rounded-2xl border border-[#E2E8F0] bg-white p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto custom-scrollbar print:border-none print:shadow-none print:p-0 print:m-0">
             {/* Modal Controls (Hidden in Print) */}
             <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4 print:hidden">
               <div className="flex items-center gap-2">
@@ -936,20 +1172,22 @@ export default function ProjectListPage() {
 
       {/* Add Project Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-2xs p-4 overflow-y-auto">
-          <div className="w-full max-w-lg rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-2xl space-y-4 my-8">
-            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4">
+          <div className="w-full max-w-lg max-h-[90vh] rounded-2xl border border-[#E2E8F0] bg-white shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] px-6 py-4 bg-[#F8FAFC] shrink-0">
               <div>
                 <h3 className="font-bold text-base text-[#0F172A]">Create New Project</h3>
                 <p className="text-xs text-[#64748B]">Initiates delivery workspace and creates Welcome Note</p>
               </div>
               <button
                 onClick={() => setIsAddModalOpen(false)}
-                className="rounded-lg p-1 text-[#64748B] hover:bg-[#F8FAFC]"
+                className="rounded-lg p-1 text-[#64748B] hover:bg-slate-200/60 transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
 
             <form onSubmit={handleCreate} className="space-y-3.5 text-xs">
               <div>
@@ -1026,6 +1264,79 @@ export default function ProjectListPage() {
                 />
               </div>
 
+              {/* Project Documents & Requirements (Max 2 Files) */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-semibold text-[#0F172A]">
+                    Project Documents & Requirements (Max 2 Files)
+                  </label>
+                  <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                    {projectFiles.length}/2 Files
+                  </span>
+                </div>
+
+                {projectFiles.length > 0 && (
+                  <div className="space-y-1.5 mb-2">
+                    {projectFiles.map((f) => (
+                      <div
+                        key={f.id}
+                        className="flex items-center justify-between p-2 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC]"
+                      >
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <Paperclip className="h-3.5 w-3.5 text-[#2563EB] shrink-0" />
+                          <span className="truncate font-semibold text-[#0F172A]">{f.name}</span>
+                          <span className="text-[10px] text-[#64748B]">({f.size})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFile(f.id, projectFiles, setProjectFiles)}
+                          className="p-1 text-slate-400 hover:text-red-600"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {projectFiles.length < 2 ? (
+                  <div className="p-3 rounded-xl border border-dashed border-blue-300 bg-blue-50/40 text-center space-y-2">
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-white border border-blue-300 px-3 py-1 text-xs font-semibold text-[#2563EB] hover:bg-blue-50 shadow-2xs">
+                      <Upload className="h-3.5 w-3.5" />
+                      <span>Choose Local File</span>
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.png,.jpg,.zip"
+                        onChange={(e) => handleAddFile(e, projectFiles, setProjectFiles)}
+                        className="hidden"
+                      />
+                    </label>
+                    <div className="flex items-center justify-center gap-2 text-[10px] text-slate-500">
+                      <span>Quick presets:</span>
+                      <button
+                        type="button"
+                        onClick={() => handleAddPresetDoc("Project Scope & SRS Document.pdf", "PDF", projectFiles, setProjectFiles)}
+                        className="text-blue-600 font-semibold hover:underline"
+                      >
+                        + SRS PDF
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => handleAddPresetDoc("UI Architecture Mockup.png", "Image", projectFiles, setProjectFiles)}
+                        className="text-blue-600 font-semibold hover:underline"
+                      >
+                        + UI Design
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold text-center">
+                    🔒 Maximum limit of 2 project documents reached.
+                  </div>
+                )}
+              </div>
+
               <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100 flex items-center gap-2.5 text-xs text-[#2563EB]">
                 <FileText className="h-4 w-4 shrink-0" />
                 <span>A formal Client Welcome & Kickoff Note PDF will be generated immediately upon creation.</span>
@@ -1047,26 +1358,29 @@ export default function ProjectListPage() {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}
 
       {/* Edit Project Modal */}
       {editingProject && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-2xs p-4 overflow-y-auto">
-          <div className="w-full max-w-lg rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-2xl space-y-4 my-8">
-            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4">
+          <div className="w-full max-w-lg max-h-[90vh] rounded-2xl border border-[#E2E8F0] bg-white shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] px-6 py-4 bg-[#F8FAFC] shrink-0">
               <div>
                 <h3 className="font-bold text-base text-[#0F172A]">Edit Project: {editingProject.projectCode}</h3>
                 <p className="text-xs text-[#64748B]">Update project milestones, deadline, budget, or manager</p>
               </div>
               <button
                 onClick={() => setEditingProject(null)}
-                className="rounded-lg p-1 text-[#64748B] hover:bg-[#F8FAFC] cursor-pointer"
+                className="rounded-lg p-1 text-[#64748B] hover:bg-slate-200/60 transition-colors cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
 
             <form onSubmit={handleSaveEdit} className="space-y-3.5 text-xs">
               <div>
@@ -1165,6 +1479,79 @@ export default function ProjectListPage() {
                 />
               </div>
 
+              {/* Edit Project Documents & Requirements (Max 2 Files) */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-semibold text-[#0F172A]">
+                    Project Documents & Requirements (Max 2 Files)
+                  </label>
+                  <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                    {editFiles.length}/2 Files
+                  </span>
+                </div>
+
+                {editFiles.length > 0 && (
+                  <div className="space-y-1.5 mb-2">
+                    {editFiles.map((f) => (
+                      <div
+                        key={f.id}
+                        className="flex items-center justify-between p-2 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC]"
+                      >
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <Paperclip className="h-3.5 w-3.5 text-[#2563EB] shrink-0" />
+                          <span className="truncate font-semibold text-[#0F172A]">{f.name}</span>
+                          <span className="text-[10px] text-[#64748B]">({f.size})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFile(f.id, editFiles, setEditFiles)}
+                          className="p-1 text-slate-400 hover:text-red-600"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {editFiles.length < 2 ? (
+                  <div className="p-3 rounded-xl border border-dashed border-blue-300 bg-blue-50/40 text-center space-y-2">
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-white border border-blue-300 px-3 py-1 text-xs font-semibold text-[#2563EB] hover:bg-blue-50 shadow-2xs">
+                      <Upload className="h-3.5 w-3.5" />
+                      <span>Choose Local File</span>
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.png,.jpg,.zip"
+                        onChange={(e) => handleAddFile(e, editFiles, setEditFiles)}
+                        className="hidden"
+                      />
+                    </label>
+                    <div className="flex items-center justify-center gap-2 text-[10px] text-slate-500">
+                      <span>Quick presets:</span>
+                      <button
+                        type="button"
+                        onClick={() => handleAddPresetDoc("Project Scope & SRS Document.pdf", "PDF", editFiles, setEditFiles)}
+                        className="text-blue-600 font-semibold hover:underline"
+                      >
+                        + SRS PDF
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => handleAddPresetDoc("UI Architecture Mockup.png", "Image", editFiles, setEditFiles)}
+                        className="text-blue-600 font-semibold hover:underline"
+                      >
+                        + UI Design
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold text-center">
+                    🔒 Maximum limit of 2 project documents reached.
+                  </div>
+                )}
+              </div>
+
               <div className="flex items-center justify-end gap-2 border-t border-[#E2E8F0] pt-3 mt-4">
                 <button
                   type="button"
@@ -1181,6 +1568,7 @@ export default function ProjectListPage() {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}

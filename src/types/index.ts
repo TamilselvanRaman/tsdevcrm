@@ -70,6 +70,7 @@ export interface EnquiryFile {
   name: string;
   size: string;
   date: string;
+  url?: string;
 }
 
 export interface Enquiry {
@@ -96,6 +97,11 @@ export interface Enquiry {
   activities: EnquiryActivity[];
   notes: EnquiryNote[];
   files: EnquiryFile[];
+  isLocked?: boolean;
+  stageStatus?: 'Enquiry' | 'FollowUp' | 'Client' | 'Project';
+  convertedFollowUpId?: string;
+  convertedClientId?: string;
+  convertedProjectId?: string;
 }
 
 export type ProjectStatus = 'In Progress' | 'At Risk' | 'Completed' | 'Planning' | 'On Hold';
@@ -105,6 +111,15 @@ export interface Milestone {
   title: string;
   progressPct: number;
   status: 'Completed' | 'In Progress' | 'Pending';
+}
+
+export interface ProjectFile {
+  id: string;
+  name: string;
+  size: string;
+  uploadedAt: string;
+  url?: string;
+  type?: string;
 }
 
 export interface Project {
@@ -123,6 +138,10 @@ export interface Project {
   budget: number;
   milestones: Milestone[];
   description: string;
+  files?: ProjectFile[];
+  sourceEnquiryId?: string;
+  sourceClientId?: string;
+  sourceFollowUpId?: string;
 }
 
 export type TaskStatus = 'BACKLOG' | 'TODO' | 'IN PROGRESS' | 'IN REVIEW' | 'CHANGES REQUESTED' | 'COMPLETED';
@@ -372,6 +391,11 @@ export interface ClientRecord {
   status: "Active" | "Inactive";
   address?: string;
   createdAt?: string;
+  sourceEnquiryId?: string;
+  sourceFollowUpId?: string;
+  linkedProjectId?: string;
+  linkedProjectName?: string;
+  isLocked?: boolean;
 }
 
 export interface ExpenseRecord {
@@ -419,8 +443,12 @@ export interface FollowUpItem {
   scheduledTime: string;
   assignedTo: string;
   purpose: string;
-  status: "Scheduled" | "Completed" | "Overdue" | "Rescheduled";
+  status: "Scheduled" | "Interested" | "Ghosting" | "Lost" | "Completed" | "Overdue" | "Rescheduled";
   notes?: string;
+  isLocked?: boolean;
+  convertedClientId?: string;
+  convertedProjectId?: string;
+  stageStatus?: "FollowUp" | "Client" | "Project";
 }
 
 

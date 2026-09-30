@@ -147,6 +147,9 @@ export function StatusBadge({
     "leave",
   ].includes(normalized);
 
+  // Purple / Lavender: Ghosting, Video Call, Demo
+  const isPurple = ["ghosting"].includes(normalized);
+
   // Slate / Gray: Draft, Backlog, Expired, On Hold, Checked Out
   let badgeStyle = "bg-slate-100 text-slate-700 border-slate-200";
   let dotStyle = "bg-slate-400";
@@ -163,6 +166,9 @@ export function StatusBadge({
   } else if (isRed) {
     badgeStyle = "bg-red-50 text-[#DC2626] border-red-200";
     dotStyle = "bg-[#DC2626]";
+  } else if (isPurple) {
+    badgeStyle = "bg-purple-50 text-purple-700 border-purple-200";
+    dotStyle = "bg-purple-500";
   }
 
   const sizeStyles = {

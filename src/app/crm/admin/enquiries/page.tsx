@@ -209,6 +209,8 @@ export default function EnquiryListPage() {
     addProject,
     addFollowUp,
     addClient,
+    convertEnquiryToFollowUp,
+    convertEnquiryToClient,
     users,
     currentUserId,
   } = useAppStore();
@@ -236,6 +238,10 @@ export default function EnquiryListPage() {
   const [fuAssignedTo, setFuAssignedTo] = useState(users[0]?.fullName || "");
 
   const handleOpenFollowUpModal = (enq: Enquiry) => {
+    if (enq.isLocked) {
+      showToast("🔒 Lead is locked. Stage already advanced.");
+      return;
+    }
     setFollowUpEnquiry(enq);
     setFuType("Phone Call");
     setFuDate(new Date(Date.now() + 86400000).toISOString().split("T")[0]);
@@ -248,22 +254,15 @@ export default function EnquiryListPage() {
   const handleScheduleFollowUp = (e: React.FormEvent) => {
     e.preventDefault();
     if (!followUpEnquiry) return;
-    addFollowUp({
-      leadName: followUpEnquiry.clientName,
-      businessName: followUpEnquiry.company || followUpEnquiry.clientName,
-      contactNumber: followUpEnquiry.phone || "+91 98765 00000",
+    convertEnquiryToFollowUp(followUpEnquiry.id, {
       type: fuType,
       scheduledDate: fuDate,
       scheduledTime: fuTime,
       assignedTo: fuAssignedTo,
       purpose: fuPurpose.trim() || `Follow up with ${followUpEnquiry.clientName}`,
-      status: "Scheduled",
     });
-    if (followUpEnquiry.status === "New") {
-      updateEnquiryStatus(followUpEnquiry.id, "Contacted");
-    }
     setFollowUpEnquiry(null);
-    showToast("✅ Follow-up scheduled! Redirecting to Follow-ups...");
+    showToast("✅ Follow-up scheduled & Enquiry locked! Redirecting to Follow-ups...");
     setTimeout(() => router.push("/crm/admin/follow-ups"), 1200);
   };
 
@@ -274,6 +273,10 @@ export default function EnquiryListPage() {
   const [cliManager, setCliManager] = useState(users[0]?.fullName || "");
 
   const handleOpenClientModal = (enq: Enquiry) => {
+    if (enq.isLocked && enq.stageStatus === "Client") {
+      showToast("🔒 Lead already converted to Client.");
+      return;
+    }
     setClientEnquiry(enq);
     setCliCategory(enq.projectType || "Software Development");
     setCliAddress(enq.location || "Chennai, Tamil Nadu");
@@ -284,23 +287,9 @@ export default function EnquiryListPage() {
   const handleConvertToClient = (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientEnquiry) return;
-    addClient({
-      companyName: clientEnquiry.company || clientEnquiry.clientName,
-      primaryContact: clientEnquiry.clientName,
-      email: clientEnquiry.email || `${clientEnquiry.clientName.toLowerCase().replace(/\s/g, "")}@example.com`,
-      phone: clientEnquiry.phone || "+91 98765 00000",
-      category: cliCategory,
-      assignedManager: cliManager,
-      address: cliAddress,
-      totalProjects: 0,
-      totalBilled: clientEnquiry.estimatedBudget || 0,
-      totalCollected: 0,
-      outstanding: clientEnquiry.estimatedBudget || 0,
-      status: "Active",
-    });
-    updateEnquiryStatus(clientEnquiry.id, "Qualified");
+    convertEnquiryToClient(clientEnquiry.id);
     setClientEnquiry(null);
-    showToast("🎉 Client created! Redirecting to Clients...");
+    showToast("🎉 Client profile created & Enquiry locked! Redirecting to Clients...");
     setTimeout(() => router.push("/crm/admin/clients"), 1200);
   };
 
@@ -331,13 +320,13 @@ export default function EnquiryListPage() {
     setClientName("");
     setCompany("");
     setRequirement("");
-    setBudget("150000");
+    setBudget("");
     setSource("Instagram");
-    setPhone("+91 98765 ");
-    setWhatsapp("+91 98765 ");
+    setPhone("");
+    setWhatsapp("");
     setEmail("");
-    setLocation("Chennai, Tamil Nadu");
-    setProjectType("Website + Android App");
+    setLocation("");
+    setProjectType("Website");
     setTimeline("4 Weeks");
     setDescription("");
     setPriority("High");
@@ -377,11 +366,27 @@ export default function EnquiryListPage() {
   };
 
   const filteredEnquiries = enquiries.filter((e) => {
+    // Hide moved/locked/converted enquiries from active view once advanced to next stage
+    const isMoved =
+      Boolean(e.isLocked) ||
+      Boolean(e.stageStatus && e.stageStatus !== "Enquiry") ||
+      Boolean(e.convertedFollowUpId) ||
+      Boolean(e.convertedClientId) ||
+      Boolean(e.convertedProjectId) ||
+      e.status === "Won";
+
+    if (isMoved && statusFilter !== "Moved to Next Stage" && statusFilter !== "All History") {
+      return false;
+    }
+
     const matchesSearch =
       e.clientName.toLowerCase().includes(search.toLowerCase()) ||
       e.company.toLowerCase().includes(search.toLowerCase()) ||
       e.requirement.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "All" || e.status === statusFilter;
+    const matchesStatus =
+      statusFilter === "All" || statusFilter === "Moved to Next Stage" || statusFilter === "All History"
+        ? true
+        : e.status === statusFilter;
     const matchesPriority = priorityFilter === "All" || e.priority === priorityFilter;
     const matchesAssigned = assignedFilter === "All" || e.assignedTo === assignedFilter;
     return matchesSearch && matchesStatus && matchesPriority && matchesAssigned;
@@ -414,10 +419,10 @@ export default function EnquiryListPage() {
         assignedToName: assignedUser?.fullName || "Tamil Selvan",
         priority,
         status: initialStatus,
-        phone: phone.trim() || "+91 98765 00000",
-        whatsapp: whatsapp.trim() || phone.trim() || "+91 98765 00000",
+        phone: phone.trim(),
+        whatsapp: whatsapp.trim() || phone.trim(),
         email: generatedEmail,
-        location: location.trim() || "Chennai, Tamil Nadu",
+        location: location.trim(),
         projectType: projectType || requirement.trim(),
         services: [projectType || "Web Development", "UI/UX Design"],
         description: description.trim(),
@@ -439,10 +444,10 @@ export default function EnquiryListPage() {
       assignedToName: assignedUser?.fullName || "Tamil Selvan",
       priority,
       status: initialStatus,
-      phone: phone.trim() || "+91 98765 00000",
-      whatsapp: whatsapp.trim() || phone.trim() || "+91 98765 00000",
+      phone: phone.trim(),
+      whatsapp: whatsapp.trim() || phone.trim(),
       email: generatedEmail,
-      location: location.trim() || "Chennai, Tamil Nadu",
+      location: location.trim(),
       projectType: projectType || requirement.trim(),
       services: [projectType || "Web Development", "UI/UX Design"],
       description:
@@ -498,7 +503,11 @@ export default function EnquiryListPage() {
       ],
       description: enq.description,
     });
-    updateEnquiryStatus(enq.id, "Won");
+    updateEnquiry(enq.id, {
+      status: "Won",
+      isLocked: true,
+      stageStatus: "Project",
+    });
     showToast("Converted to delivery project!");
     router.push("/crm/admin/projects");
   };
@@ -605,7 +614,7 @@ export default function EnquiryListPage() {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1.5 text-xs font-medium text-[#0F172A] focus:outline-hidden"
           >
-            <option value="All">All Statuses</option>
+            <option value="All">Active Enquiries (Default)</option>
             <option value="New">New</option>
             <option value="Contacted">Contacted</option>
             <option value="Qualified">Qualified</option>
@@ -613,6 +622,8 @@ export default function EnquiryListPage() {
             <option value="Negotiation">Negotiation</option>
             <option value="Won">Won</option>
             <option value="Lost">Lost</option>
+            <option value="Moved to Next Stage">🔒 Moved to Next Stage</option>
+            <option value="All History">All History (Inc. Moved)</option>
           </select>
 
           {/* Priority Filter */}
@@ -688,7 +699,14 @@ export default function EnquiryListPage() {
                       title="Click anywhere to view enquiry details"
                     >
                       <td className="font-semibold text-[#0F172A]">
-                        <span className="hover:text-[#2563EB] transition-colors">{enq.clientName}</span>
+                        <span className="hover:text-[#2563EB] transition-colors inline-flex items-center gap-1.5">
+                          {enq.clientName}
+                          {enq.isLocked && (
+                            <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-md bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-0.5">
+                              🔒 {enq.stageStatus || "Advanced"}
+                            </span>
+                          )}
+                        </span>
                       </td>
                       <td className="text-[#64748B]">{enq.company}</td>
                       <td className="text-[#0F172A] font-medium">{enq.requirement}</td>
@@ -719,20 +737,20 @@ export default function EnquiryListPage() {
                       </td>
                       {/* Interactive Status Selector Dropdown */}
                       <td onClick={(e) => {
-                        if (enq.status !== "New") {
+                        if (enq.isLocked || enq.status !== "New") {
                           e.stopPropagation();
                           return;
                         }
                         e.stopPropagation();
                       }}>
-                        <div className={enq.status !== "New" ? "pointer-events-none opacity-60" : ""}>
+                        <div className={enq.isLocked || enq.status !== "New" ? "pointer-events-none opacity-60" : ""}>
                           <StatusDropdown
                             currentStatus={enq.status}
                             onStatusChange={(newStatus) => handleStatusChange(enq.id, newStatus)}
                             isOpen={activeDropdownEnquiryId === enq.id}
                             onToggle={(e) => {
                               e.stopPropagation();
-                              if (enq.status === "New") {
+                              if (!enq.isLocked && enq.status === "New") {
                                 setActiveDropdownEnquiryId(activeDropdownEnquiryId === enq.id ? null : enq.id);
                               }
                             }}
@@ -746,27 +764,27 @@ export default function EnquiryListPage() {
                           <button
                             type="button"
                             onClick={() => handleOpenFollowUpModal(enq)}
-                            disabled={enq.status !== "New"}
+                            disabled={enq.isLocked || enq.status !== "New"}
                             className="p-1.5 text-[#64748B] hover:text-[#7C3AED] hover:bg-purple-50 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                            title="Schedule Follow-up"
+                            title={enq.isLocked ? "Stage Locked" : "Schedule Follow-up"}
                           >
                             <CalendarCheck className="h-3.5 w-3.5" />
                           </button>
                           <button
                             type="button"
                             onClick={() => handleOpenEditModal(enq)}
-                            disabled={enq.status !== "New"}
+                            disabled={enq.isLocked || enq.status !== "New"}
                             className="p-1.5 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                            title="Edit Lead"
+                            title={enq.isLocked ? "Lead Locked" : "Edit Lead"}
                           >
                             <Edit2 className="h-3.5 w-3.5" />
                           </button>
                           <button
                             type="button"
                             onClick={() => setDeleteTarget(enq)}
-                            disabled={enq.status !== "New"}
+                            disabled={enq.isLocked || enq.status !== "New"}
                             className="p-1.5 text-[#64748B] hover:text-[#DC2626] hover:bg-red-50 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                            title="Delete Lead"
+                            title={enq.isLocked ? "Lead Locked" : "Delete Lead"}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -918,25 +936,73 @@ export default function EnquiryListPage() {
 
               {/* Direct Communication Channels */}
               <div className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3.5 space-y-2 text-xs">
-                <div className="font-bold text-[#0F172A]">Contact Channels</div>
-                <div className="grid grid-cols-2 gap-2 text-[#0F172A]">
+                <div className="font-bold text-[#0F172A] flex items-center justify-between">
+                  <span>Contact Channels</span>
+                  {selectedEnquiry.location && (
+                    <span className="text-[11px] font-normal text-[#64748B] flex items-center gap-1">
+                      <MapPin className="h-3 w-3 text-[#2563EB]" />
+                      {selectedEnquiry.location}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[#0F172A]">
                   <a
                     href={`tel:${selectedEnquiry.phone}`}
-                    className="flex items-center gap-2 p-2 rounded-lg bg-white border border-[#E2E8F0] hover:bg-blue-50 transition-colors"
+                    className="flex items-center gap-2 p-2 rounded-lg bg-white border border-[#E2E8F0] hover:bg-blue-50 transition-colors truncate"
                   >
-                    <Phone className="h-3.5 w-3.5 text-[#2563EB]" />
-                    <span className="truncate">{selectedEnquiry.phone}</span>
+                    <Phone className="h-3.5 w-3.5 text-[#2563EB] shrink-0" />
+                    <span className="truncate font-medium">{selectedEnquiry.phone || "No Phone"}</span>
                   </a>
                   <a
-                    href={`https://wa.me/${selectedEnquiry.whatsapp.replace(/[^0-9]/g, "")}`}
+                    href={`https://wa.me/${(selectedEnquiry.whatsapp || selectedEnquiry.phone || "").replace(/[^0-9]/g, "")}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center gap-2 p-2 rounded-lg bg-white border border-[#E2E8F0] hover:bg-emerald-50 transition-colors"
+                    className="flex items-center gap-2 p-2 rounded-lg bg-white border border-[#E2E8F0] hover:bg-emerald-50 transition-colors truncate"
                   >
-                    <MessageSquare className="h-3.5 w-3.5 text-[#16A34A]" />
-                    <span>WhatsApp</span>
+                    <MessageSquare className="h-3.5 w-3.5 text-[#16A34A] shrink-0" />
+                    <span className="truncate font-semibold text-[#16A34A]">
+                      {selectedEnquiry.whatsapp || selectedEnquiry.phone || "No WhatsApp"}
+                    </span>
                   </a>
+                  {selectedEnquiry.email && (
+                    <a
+                      href={`mailto:${selectedEnquiry.email}`}
+                      className="flex items-center gap-2 p-2 rounded-lg bg-white border border-[#E2E8F0] hover:bg-blue-50 transition-colors truncate"
+                    >
+                      <Mail className="h-3.5 w-3.5 text-[#2563EB] shrink-0" />
+                      <span className="truncate font-medium">{selectedEnquiry.email}</span>
+                    </a>
+                  )}
                 </div>
+              </div>
+
+              {/* Scope & Requirement Full Card */}
+              <div className="rounded-xl border border-[#E2E8F0] bg-white p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
+                    Project Scope & Requirements
+                  </span>
+                  {selectedEnquiry.expectedTimeline && (
+                    <span className="text-[11px] font-semibold text-[#2563EB] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      ⏱️ {selectedEnquiry.expectedTimeline}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-[#0F172A] leading-relaxed font-medium bg-[#F8FAFC] p-3 rounded-lg border border-[#E2E8F0]">
+                  {selectedEnquiry.description || selectedEnquiry.requirement}
+                </p>
+                {selectedEnquiry.services && selectedEnquiry.services.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {selectedEnquiry.services.map((srv, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-700 rounded-md border border-slate-200"
+                      >
+                        {srv}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Notes & Activity Section ("What he do / add notes") */}
@@ -1042,42 +1108,23 @@ export default function EnquiryListPage() {
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedEnquiryId(null);
-                    handleOpenFollowUpModal(selectedEnquiry);
-                  }}
-                  disabled={selectedEnquiry.status !== "New"}
-                  className="flex flex-col items-center gap-1 rounded-xl bg-amber-500 px-2 py-2.5 text-[10px] font-bold text-white hover:bg-amber-600 shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 disabled:hover:bg-amber-500"
-                >
-                  <CalendarCheck className="h-4 w-4" />
-                  <span>Schedule Follow-up</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedEnquiryId(null);
-                    handleOpenClientModal(selectedEnquiry);
-                  }}
-                  disabled={selectedEnquiry.status !== "New"}
-                  className="flex flex-col items-center gap-1 rounded-xl bg-blue-600 px-2 py-2.5 text-[10px] font-bold text-white hover:bg-blue-700 shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 disabled:hover:bg-blue-600"
-                >
-                  <UserCheck className="h-4 w-4" />
-                  <span>Move to Client</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleConvertToProject(selectedEnquiry)}
-                  disabled={selectedEnquiry.status !== "New"}
-                  className="flex flex-col items-center gap-1 rounded-xl bg-emerald-600 px-2 py-2.5 text-[10px] font-bold text-white hover:bg-emerald-700 shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 disabled:hover:bg-emerald-600"
-                >
-                  <FolderPlus className="h-4 w-4" />
-                  <span>Create Project</span>
-                </button>
-              </div>
+              {/* Action Button: Single Linear Progression (Move to Follow-Up) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedEnquiryId(null);
+                  handleOpenFollowUpModal(selectedEnquiry);
+                }}
+                disabled={selectedEnquiry.isLocked}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#2563EB] hover:bg-blue-700 py-3 text-xs font-bold text-white shadow-md shadow-blue-500/20 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+              >
+                <CalendarCheck className="h-4 w-4" />
+                <span>
+                  {selectedEnquiry.isLocked
+                    ? `🔒 Lead Moved to ${selectedEnquiry.stageStatus || "Follow-up"} Stage`
+                    : "Schedule Follow-Up Stage"}
+                </span>
+              </button>
 
               <button
                 type="button"
@@ -1236,10 +1283,10 @@ export default function EnquiryListPage() {
 
       {/* Add New Enquiry Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="relative w-full max-w-2xl rounded-2xl border border-[#E2E8F0] bg-white shadow-2xl my-8 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4">
+          <div className="relative w-full max-w-2xl rounded-2xl border border-[#E2E8F0] bg-white shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-[#E2E8F0] px-6 py-4 bg-gradient-to-r from-blue-50/60 via-slate-50/40 to-white">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] px-6 py-4 bg-gradient-to-r from-blue-50/60 via-slate-50/40 to-white shrink-0">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#2563EB] text-white shadow-sm">
                   {editingEnquiry ? <Edit2 className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
@@ -1268,7 +1315,7 @@ export default function EnquiryListPage() {
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleCreate} className="p-6 space-y-5 text-xs max-h-[80vh] overflow-y-auto">
+            <form onSubmit={handleCreate} className="p-6 space-y-5 text-xs flex-1 overflow-y-auto custom-scrollbar">
               {/* Section 1: Client & Contact Info */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2 pb-1 border-b border-[#F1F5F9]">

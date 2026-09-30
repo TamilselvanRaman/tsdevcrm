@@ -17,9 +17,12 @@ import {
   CalendarPlus,
   ArrowRightLeft,
   Command,
+  Database,
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { clsx } from "clsx";
+
+import { auth } from "@/lib/firebase";
 
 export function Header() {
   const pathname = usePathname();
@@ -42,13 +45,26 @@ export function Header() {
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
-  // Safe fallback for currentUser to avoid crashes when users list is loading
-  const currentUser = users.find((u) => u.id === currentUserId) || users[0] || {
-    id: "guest",
-    fullName: "Tamil Selvan R",
-    role: "Admin",
-    email: "ceittamilselvanr@gmail.com",
-    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+  // Dynamic logged-in user resolution (no hardcoded fallback names)
+  const activeAuthUser = typeof window !== "undefined" ? auth.currentUser : null;
+  const matchedUser =
+    users.find((u) => u.id === currentUserId) ||
+    users.find(
+      (u) =>
+        activeAuthUser?.email && u.email.trim().toLowerCase() === activeAuthUser.email.trim().toLowerCase()
+    );
+
+  const currentUser = matchedUser || {
+    id: currentUserId || activeAuthUser?.uid || "usr-current",
+    fullName:
+      activeAuthUser?.displayName ||
+      (activeAuthUser?.email ? activeAuthUser.email.split("@")[0] : "Logged User"),
+    role: portalMode === "admin" ? "Admin" : "Developer",
+    team: portalMode === "admin" ? "Management" : "Development",
+    email: activeAuthUser?.email || "user@tsdev.io",
+    avatarUrl:
+      activeAuthUser?.photoURL || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+    status: "Active",
   };
 
   // Generate dynamic breadcrumbs
@@ -319,6 +335,14 @@ export function Header() {
                   <FilePlus className="h-4 w-4 text-emerald-600" />
                   <span>Generate Invoice</span>
                 </Link>
+                <button
+                  type="button"
+                 
+                  className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-[#0F172A] hover:bg-purple-50 hover:text-purple-600 transition-colors border-t border-[#F1F5F9] mt-1 pt-2 text-left cursor-pointer"
+                >
+                  <Database className="h-4 w-4 text-purple-600" />
+                  <span>Seed All 14 Sample Datasets</span>
+                </button>
               </div>
             </>
           )}

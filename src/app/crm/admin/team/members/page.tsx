@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { UserRole, UserTeam, UserPermissions, User } from "@/types";
-import { DEFAULT_PERMISSIONS } from "@/lib/mockData";
+import { DEFAULT_PERMISSIONS, ADMIN_PERMISSIONS } from "@/lib/mockData";
 import { registerUser } from "@/lib/firebaseAuth";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -91,33 +91,42 @@ export default function TeamMembersPage() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password && password !== confirmPassword) {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    if (cleanPassword && cleanPassword !== confirmPassword.trim()) {
       alert("Passwords do not match!");
       return;
     }
 
     try {
-      if (email && password) {
-        await registerUser(email, password);
+      if (cleanEmail && cleanPassword) {
+        await registerUser(cleanEmail, cleanPassword);
       }
     } catch (err: any) {
       console.warn("Firebase Auth user registration note:", err.message);
     }
 
+    const isTsDevAdmin = cleanEmail.endsWith("@tsdev.io");
+    const assignedRole: UserRole = isTsDevAdmin ? "Admin" : role;
+    const assignedPermissions: UserPermissions = isTsDevAdmin
+      ? ADMIN_PERMISSIONS
+      : permissions;
+
     addUser({
-      fullName,
-      email,
-      username: username || email.split("@")[0],
-      phone: phone || "+91 98765 00000",
-      role,
-      team,
+      fullName: fullName.trim(),
+      email: cleanEmail,
+      username: username.trim() || cleanEmail.split("@")[0],
+      phone: phone.trim() || "+91 98765 00000",
+      role: assignedRole,
+      team: isTsDevAdmin ? "Management" : team,
       avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
       status,
-      permissions,
+      permissions: assignedPermissions,
     });
 
     setIsAddModalOpen(false);
-    showToast("Team member created in Firebase Auth & Database!");
+    showToast(`User ${cleanEmail} created in Firebase Auth & Database!`);
 
     // Reset Form
     setFullName("");
@@ -1121,8 +1130,8 @@ export default function TeamMembersPage() {
 
       {/* Edit Team Member Modal */}
       {isEditModalOpen && editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-2xs p-4 overflow-y-auto">
-          <div className="relative w-full max-w-lg rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-2xl my-8 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-2xs p-4">
+          <div className="relative w-full max-w-lg rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3 mb-4">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-[#2563EB]">

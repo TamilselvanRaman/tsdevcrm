@@ -23,18 +23,22 @@ import {
   FollowUpItem,
 } from "@/types";
 import {
-  INITIAL_USERS,
-  INITIAL_ENQUIRIES,
-  INITIAL_PROJECTS,
-  INITIAL_TASKS,
-  INITIAL_TEAMS,
-  INITIAL_DAILY_REPORTS,
-  INITIAL_ATTENDANCE,
-  INITIAL_INVOICES,
-  INITIAL_PAYMENTS,
-  INITIAL_NOTIFICATIONS,
-  INITIAL_PROJECT_DOCUMENTS,
-} from "@/lib/mockData";
+  enquiriesApi,
+  followUpsApi,
+  clientsApi,
+  projectsApi,
+  tasksApi,
+  usersApi,
+  dailyReportsApi,
+  attendanceApi,
+  invoicesApi,
+  documentsApi,
+  notesApi,
+  noticesApi,
+  expensesApi,
+  teamsApi,
+} from "@/lib/apiClient";
+
 import {
   subscribeEnquiries,
   saveEnquiry,
@@ -84,7 +88,7 @@ export type PortalMode = "admin" | "team_member";
 export const SYSTEM_FALLBACK_USER: User = {
   id: "usr-admin-1",
   fullName: "Tamil Selvan R",
-  email: "ceittamilselvanr@gmail.com",
+  email: "ceittamilselvanr26@tsdev.io",
   username: "tamilselvanr",
   phone: "+91 98765 43210",
   role: "Admin",
@@ -243,6 +247,12 @@ interface AppState {
   updateFollowUp: (id: string, updates: Partial<FollowUpItem>) => void;
   deleteFollowUp: (id: string) => void;
 
+  // Pipeline Transitions & Stage Locking
+  convertEnquiryToFollowUp: (enquiryId: string, followUpData: Partial<FollowUpItem>) => string;
+  convertEnquiryToClient: (enquiryId: string) => string;
+  convertFollowUpToClient: (followUpId: string, clientData?: Partial<ClientRecord>) => string;
+  convertClientToProject: (clientId: string, projectData: Partial<Project>) => string;
+
   // Actions - Notifications
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
@@ -288,7 +298,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   firebaseSynced: false,
 
   initFirebaseSync: () => {
-    // Real-time Firestore Subscriptions
+    // Real-time Firestore Subscriptions (Clean Live Sync - No Mock Seed Data)
     const unsubEnquiries = subscribeEnquiries((list) => {
       if (list !== undefined && list !== null) set({ enquiries: list });
     });
@@ -299,7 +309,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (list !== undefined && list !== null) set({ tasks: list });
     });
     const unsubUsers = subscribeUsers((list) => {
-      if (list !== undefined && list !== null) set({ users: list });
+      if (list !== undefined && list !== null) {
+        set({ users: list });
+      }
     });
     const unsubReports = subscribeDailyReports((list) => {
       if (list !== undefined && list !== null) set({ dailyReports: list });
@@ -352,17 +364,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
   },
 
-  users: INITIAL_USERS,
-  enquiries: INITIAL_ENQUIRIES,
-  projects: INITIAL_PROJECTS,
-  tasks: INITIAL_TASKS,
-  teams: INITIAL_TEAMS,
-  dailyReports: INITIAL_DAILY_REPORTS,
-  attendance: INITIAL_ATTENDANCE,
-  invoices: INITIAL_INVOICES,
-  payments: INITIAL_PAYMENTS,
-  notifications: INITIAL_NOTIFICATIONS,
-  documents: INITIAL_PROJECT_DOCUMENTS,
+
+
+  users: [],
+  enquiries: [],
+  projects: [],
+  tasks: [],
+  teams: [],
+  dailyReports: [],
+  attendance: [],
+  invoices: [],
+  payments: [],
+  notifications: [],
+  documents: [],
   clients: [],
   expenses: [],
   notes: [],
@@ -442,6 +456,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
     set((s) => ({ enquiries: [newEnq, ...s.enquiries] }));
     saveEnquiry(newEnq).catch(() => {});
+    enquiriesApi.create(newEnq).catch(() => {});
   },
 
   updateEnquiry: (id, updates) => {
@@ -450,6 +465,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (e.id === id) {
           const updated = { ...e, ...updates };
           saveEnquiry(updated).catch(() => {});
+          enquiriesApi.update(id, updated).catch(() => {});
           return updated;
         }
         return e;
@@ -525,6 +541,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       enquiries: s.enquiries.filter((e) => e.id !== id),
     }));
     deleteEnquiry(id).catch(() => {});
+    enquiriesApi.delete(id).catch(() => {});
   },
 
   // Project Actions
@@ -536,6 +553,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
     set((s) => ({ projects: [newPrj, ...s.projects] }));
     saveProject(newPrj).catch(() => {});
+    projectsApi.create(newPrj).catch(() => {});
   },
 
   updateProject: (id, updates) => {
@@ -544,6 +562,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (p.id === id) {
           const updated = { ...p, ...updates };
           saveProject(updated).catch(() => {});
+          projectsApi.update(id, updated).catch(() => {});
           return updated;
         }
         return p;
@@ -569,6 +588,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       projects: s.projects.filter((p) => p.id !== id),
     }));
     deleteProject(id).catch(() => {});
+    projectsApi.delete(id).catch(() => {});
   },
 
   // Task Actions
@@ -605,6 +625,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       ],
     }));
     saveTask(newTask).catch(() => {});
+    tasksApi.create(newTask).catch(() => {});
   },
 
   createTask: (task) => {
@@ -753,6 +774,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (t.id === id) {
           const updated = { ...t, ...updates };
           saveTask(updated).catch(() => {});
+          tasksApi.update(id, updated).catch(() => {});
           return updated;
         }
         return t;
@@ -765,18 +787,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       tasks: s.tasks.filter((t) => t.id !== id),
     }));
     deleteTask(id).catch(() => {});
+    tasksApi.delete(id).catch(() => {});
   },
 
   // Users & Team
   addUser: (userData) => {
-    const num = Math.floor(10 + Math.random() * 90);
     const newUser: User = {
       ...userData,
-      id: `usr-0${num}`,
+      id: `usr-${Date.now()}`,
       lastActive: "Just now",
     };
     set((s) => ({ users: [...s.users, newUser] }));
-    saveUser(newUser).catch(() => {});
+    saveUser(newUser).catch((err) => {
+      console.error("Error saving new user to Firestore:", err);
+    });
   },
 
   updateUser: (userId, updates) => {
@@ -1081,6 +1105,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       clients: s.clients.filter((c) => c.id !== id),
     }));
     deleteClient(id).catch(() => {});
+    clientsApi.delete(id).catch(() => {});
   },
 
   // Expenses Actions
@@ -1091,6 +1116,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
     set((s) => ({ expenses: [newExp, ...s.expenses] }));
     saveExpense(newExp).catch(() => {});
+    expensesApi.create(newExp).catch(() => {});
   },
 
   updateExpense: (id, updates) => {
@@ -1099,6 +1125,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (e.id === id) {
           const updated = { ...e, ...updates };
           saveExpense(updated).catch(() => {});
+          expensesApi.update(id, updated).catch(() => {});
           return updated;
         }
         return e;
@@ -1111,6 +1138,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       expenses: s.expenses.filter((e) => e.id !== id),
     }));
     deleteExpense(id).catch(() => {});
+    expensesApi.delete(id).catch(() => {});
   },
 
   // Notes Actions
@@ -1122,6 +1150,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
     set((s) => ({ notes: [newNote, ...s.notes] }));
     saveNote(newNote).catch(() => {});
+    notesApi.create(newNote).catch(() => {});
   },
 
   updateNote: (id, updates) => {
@@ -1130,6 +1159,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (n.id === id) {
           const updated = { ...n, ...updates };
           saveNote(updated).catch(() => {});
+          notesApi.update(id, updated).catch(() => {});
           return updated;
         }
         return n;
@@ -1142,6 +1172,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       notes: s.notes.filter((n) => n.id !== id),
     }));
     deleteNote(id).catch(() => {});
+    notesApi.delete(id).catch(() => {});
   },
 
   togglePinNote: (id) => {
@@ -1167,6 +1198,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
     set((s) => ({ notices: [newNotice, ...s.notices] }));
     saveNotice(newNotice).catch(() => {});
+    noticesApi.create(newNotice).catch(() => {});
   },
 
   updateNotice: (id, updates) => {
@@ -1175,6 +1207,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (n.id === id) {
           const updated = { ...n, ...updates };
           saveNotice(updated).catch(() => {});
+          noticesApi.update(id, updated).catch(() => {});
           return updated;
         }
         return n;
@@ -1187,6 +1220,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       notices: s.notices.filter((n) => n.id !== id),
     }));
     deleteNotice(id).catch(() => {});
+    noticesApi.delete(id).catch(() => {});
   },
 
   acknowledgeNotice: (id) => {
@@ -1210,6 +1244,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
     set((s) => ({ followUps: [newFollowUp, ...s.followUps] }));
     saveFollowUp(newFollowUp).catch(() => {});
+    followUpsApi.create(newFollowUp).catch(() => {});
   },
 
   updateFollowUp: (id, updates) => {
@@ -1218,6 +1253,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (f.id === id) {
           const updated = { ...f, ...updates };
           saveFollowUp(updated).catch(() => {});
+          followUpsApi.update(id, updated).catch(() => {});
           return updated;
         }
         return f;
@@ -1230,6 +1266,222 @@ export const useAppStore = create<AppState>((set, get) => ({
       followUps: s.followUps.filter((f) => f.id !== id),
     }));
     deleteFollowUp(id).catch(() => {});
+  },
+
+  // Pipeline Transitions & Auto-Locking
+  convertEnquiryToFollowUp: (enquiryId, followUpData) => {
+    const enquiry = get().enquiries.find((e) => e.id === enquiryId);
+    if (!enquiry) return "";
+
+    const newFollowUpId = `fol-${Date.now()}`;
+    const newFollowUp: FollowUpItem = {
+      id: newFollowUpId,
+      leadId: enquiryId,
+      leadName: enquiry.clientName,
+      businessName: enquiry.company || enquiry.clientName,
+      contactNumber: enquiry.phone,
+      type: followUpData.type || "Phone Call",
+      scheduledDate: followUpData.scheduledDate || new Date().toISOString().split("T")[0],
+      scheduledTime: followUpData.scheduledTime || "10:00 AM",
+      assignedTo: followUpData.assignedTo || enquiry.assignedToName || get().users[0]?.fullName || "System Admin",
+      purpose: followUpData.purpose || enquiry.requirement || "Follow-up on enquiry",
+      status: "Scheduled",
+      notes: followUpData.notes || enquiry.description,
+      stageStatus: "FollowUp",
+    };
+
+    const updatedEnquiry: Enquiry = {
+      ...enquiry,
+      status: "Contacted",
+      isLocked: true,
+      stageStatus: "FollowUp",
+      convertedFollowUpId: newFollowUpId,
+      activities: [
+        {
+          id: `act-${Date.now()}`,
+          text: `Moved to Follow-Up stage & scheduled ${newFollowUp.type}.`,
+          timestamp: new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }),
+          author: "System",
+        },
+        ...(enquiry.activities || []),
+      ],
+    };
+
+    set((s) => ({
+      followUps: [newFollowUp, ...s.followUps],
+      enquiries: s.enquiries.map((e) => (e.id === enquiryId ? updatedEnquiry : e)),
+    }));
+
+    saveFollowUp(newFollowUp).catch(() => {});
+    saveEnquiry(updatedEnquiry).catch(() => {});
+
+    return newFollowUpId;
+  },
+
+  convertEnquiryToClient: (enquiryId) => {
+    const enquiry = get().enquiries.find((e) => e.id === enquiryId);
+    if (!enquiry) return "";
+
+    const newClientId = `cli-${Date.now()}`;
+    const newClient: ClientRecord = {
+      id: newClientId,
+      companyName: enquiry.company || enquiry.clientName,
+      primaryContact: enquiry.clientName,
+      email: enquiry.email,
+      phone: enquiry.phone,
+      category: enquiry.projectType || "General",
+      assignedManager: enquiry.assignedToName || get().users[0]?.fullName || "System Admin",
+      totalProjects: 0,
+      totalBilled: enquiry.estimatedBudget || 0,
+      totalCollected: 0,
+      outstanding: enquiry.estimatedBudget || 0,
+      status: "Active",
+      address: enquiry.location,
+      createdAt: new Date().toISOString().split("T")[0],
+      sourceEnquiryId: enquiryId,
+    };
+
+    const updatedEnquiry: Enquiry = {
+      ...enquiry,
+      status: "Won",
+      isLocked: true,
+      stageStatus: "Client",
+      convertedClientId: newClientId,
+      activities: [
+        {
+          id: `act-${Date.now()}`,
+          text: `Converted to Client record (${newClient.companyName}).`,
+          timestamp: new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }),
+          author: "System",
+        },
+        ...(enquiry.activities || []),
+      ],
+    };
+
+    set((s) => ({
+      clients: [newClient, ...s.clients],
+      enquiries: s.enquiries.map((e) => (e.id === enquiryId ? updatedEnquiry : e)),
+      followUps: s.followUps.map((f) =>
+        f.leadId === enquiryId
+          ? { ...f, isLocked: true, stageStatus: "Client", convertedClientId: newClientId, status: "Completed" }
+          : f
+      ),
+    }));
+
+    saveClient(newClient).catch(() => {});
+    saveEnquiry(updatedEnquiry).catch(() => {});
+
+    return newClientId;
+  },
+
+  convertFollowUpToClient: (followUpId, clientData) => {
+    const followUp = get().followUps.find((f) => f.id === followUpId);
+    if (!followUp) return "";
+
+    const enquiry = get().enquiries.find(
+      (e) => e.id === followUp.leadId || e.clientName.toLowerCase() === followUp.leadName.toLowerCase()
+    );
+
+    const fallbackEmail = `${followUp.leadName.trim().toLowerCase().replace(/[^a-z0-9]/g, ".")}@gmail.com`;
+
+    const newClientId = `cli-${Date.now()}`;
+    const newClient: ClientRecord = {
+      id: newClientId,
+      companyName: clientData?.companyName || followUp.businessName || enquiry?.company || followUp.leadName,
+      primaryContact: clientData?.primaryContact || followUp.leadName || enquiry?.clientName || "Client Contact",
+      email: clientData?.email || enquiry?.email || fallbackEmail,
+      phone: clientData?.phone || followUp.contactNumber || enquiry?.phone || "+91 98765 00000",
+      category: clientData?.category || enquiry?.projectType || "Software Development",
+      assignedManager: clientData?.assignedManager || followUp.assignedTo || enquiry?.assignedToName || get().users[0]?.fullName || "System Admin",
+      totalProjects: 0,
+      totalBilled: enquiry?.estimatedBudget || 0,
+      totalCollected: 0,
+      outstanding: enquiry?.estimatedBudget || 0,
+      status: "Active",
+      address: clientData?.address || enquiry?.location || "Chennai, Tamil Nadu",
+      createdAt: new Date().toISOString().split("T")[0],
+      sourceFollowUpId: followUpId,
+      sourceEnquiryId: followUp.leadId || enquiry?.id,
+    };
+
+    const updatedFollowUp: FollowUpItem = {
+      ...followUp,
+      status: "Completed",
+      isLocked: true,
+      stageStatus: "Client",
+      convertedClientId: newClientId,
+    };
+
+    set((s) => ({
+      clients: [newClient, ...s.clients],
+      followUps: s.followUps.map((f) => (f.id === followUpId ? updatedFollowUp : f)),
+      enquiries: enquiry
+        ? s.enquiries.map((e) =>
+            e.id === enquiry.id
+              ? { ...e, status: "Won", isLocked: true, stageStatus: "Client", convertedClientId: newClientId }
+              : e
+          )
+        : s.enquiries,
+    }));
+
+    saveClient(newClient).catch(() => {});
+    saveFollowUp(updatedFollowUp).catch(() => {});
+    if (enquiry) {
+      saveEnquiry({
+        ...enquiry,
+        status: "Won",
+        isLocked: true,
+        stageStatus: "Client",
+        convertedClientId: newClientId,
+      }).catch(() => {});
+    }
+
+    return newClientId;
+  },
+
+  convertClientToProject: (clientId, projectData) => {
+    const client = get().clients.find((c) => c.id === clientId);
+    if (!client) return "";
+
+    const newProjectId = `prj-${Math.floor(100 + Math.random() * 900)}`;
+    const newProject: Project = {
+      id: newProjectId,
+      projectCode: `PRJ-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+      projectName: projectData.projectName || `${client.companyName} Project`,
+      clientName: client.companyName || client.primaryContact,
+      managerId: get().users[0]?.id || "usr-admin-1",
+      managerName: client.assignedManager || get().users[0]?.fullName || "System Admin",
+      teamMembers: projectData.teamMembers || [],
+      teamMemberNames: projectData.teamMemberNames || [],
+      progressPct: 0,
+      deadline: projectData.deadline || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+      status: "Planning",
+      priority: projectData.priority || "Medium",
+      budget: projectData.budget || client.totalBilled || 0,
+      milestones: projectData.milestones || [],
+      description: projectData.description || `Project initiated for ${client.companyName}.`,
+      sourceClientId: clientId,
+      sourceEnquiryId: client.sourceEnquiryId,
+      sourceFollowUpId: client.sourceFollowUpId,
+    };
+
+    const updatedClient: ClientRecord = {
+      ...client,
+      linkedProjectId: newProjectId,
+      linkedProjectName: newProject.projectName,
+      totalProjects: (client.totalProjects || 0) + 1,
+      isLocked: true,
+    };
+
+    set((s) => ({
+      projects: [newProject, ...s.projects],
+      clients: s.clients.map((c) => (c.id === clientId ? updatedClient : c)),
+    }));
+
+    saveProject(newProject).catch(() => {});
+    saveClient(updatedClient).catch(() => {});
+
+    return newProjectId;
   },
 
   // Notifications

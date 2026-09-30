@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Lock, Mail, AlertCircle, ShieldCheck } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
-import { signInUser } from "@/lib/firebaseAuth";
+import { registerUser, signInUser } from "@/lib/firebaseAuth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,40 +18,51 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    if (!cleanEmail || !cleanPassword) {
+      setErrorMessage("Please enter both work email and password.");
+      return;
+    }
 
     setErrorMessage("");
     setLoading(true);
 
     try {
-      // 1. Attempt Firebase Authentication
+      // 1. Firebase Authentication Verification with registration fallback
       try {
-        await signInUser(email.trim(), password);
+        await signInUser(cleanEmail, cleanPassword);
       } catch (authErr: any) {
-        console.warn("Firebase Auth Notice:", authErr?.message);
+        console.warn("SignIn attempt notice, attempting auto-register/sign-in fallback:", authErr);
+        try {
+          await registerUser(cleanEmail, cleanPassword);
+        } catch (regErr: any) {
+          if (authErr.code === "auth/invalid-credential" || authErr.code === "auth/wrong-password") {
+            throw new Error("Invalid password for " + cleanEmail + ". Please check your password.");
+          }
+          throw new Error("Authentication failed. Please verify your email and password.");
+        }
       }
 
-      // 2. Look up matching user in store
-      const cleanEmail = email.trim().toLowerCase();
+      // 2. Look up matching user in store (with sanitized email)
       const matchingUser = users.find(
         (u) =>
-          u.email.toLowerCase() === cleanEmail ||
-          (u.username && u.username.toLowerCase() === cleanEmail)
+          u.email.trim().toLowerCase() === cleanEmail ||
+          (u.username && u.username.trim().toLowerCase() === cleanEmail)
       );
 
-      // 3. Determine if user is Admin or Team Member
-      const isAdminRole =
-        matchingUser?.role === "Admin" ||
-        cleanEmail === "ceittamilselvanr@gmail.com" ||
-        cleanEmail === "imjeeva08@gmail.com" ||
-        cleanEmail === "vishalbharath566@gmail.com" ||
-        cleanEmail.startsWith("admin");
+      // 3. Domain & Role Access Determination
+      // Admin accounts end with @tsdev.io or have Admin role in store/database
+      const isAdminDomain = cleanEmail.endsWith("@tsdev.io");
+      const isAdminRole = matchingUser?.role === "Admin";
 
-      if (isAdminRole) {
+      if (isAdminDomain || isAdminRole) {
         const adminId = matchingUser?.id || "usr-admin-1";
         loginAsAdmin(adminId);
         router.push("/crm/admin");
       } else {
+        // Team Members (@gmail.com) route to Team Member Portal
         const memberId =
           matchingUser?.id ||
           users.find((u) => u.role !== "Admin")?.id ||
@@ -60,7 +71,7 @@ export default function LoginPage() {
         router.push("/crm/member/dashboard");
       }
     } catch (err: any) {
-      setErrorMessage(err.message || "Invalid authentication credentials. Please check your email and password.");
+      setErrorMessage(err.message || "Invalid email or password. Please verify your credentials.");
     } finally {
       setLoading(false);
     }

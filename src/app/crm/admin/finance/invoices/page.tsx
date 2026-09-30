@@ -929,8 +929,8 @@ export default function InvoicesPage() {
       {/* Exact Template Match for muthusaravanan_invoice_2.pdf                      */}
       {/* ========================================================================= */}
       {previewInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-2xs p-4 overflow-y-auto">
-          <div className="w-full max-w-3xl rounded-2xl border border-[#E2E8F0] bg-white p-6 sm:p-8 shadow-2xl my-8 space-y-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-2xs p-4">
+          <div className="w-full max-w-3xl rounded-2xl border border-[#E2E8F0] bg-white p-6 sm:p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
             {/* Modal Control Bar (Hidden when printing) */}
             <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4 print:hidden">
               <div className="flex items-center gap-2">

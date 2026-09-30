@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   MessageSquare,
   FolderKanban,
@@ -17,7 +19,16 @@ import {
 import { useAppStore } from "@/store/useAppStore";
 
 export default function AdminDashboard() {
-  const { enquiries, projects, tasks, users, dailyReports, invoices } = useAppStore();
+  const router = useRouter();
+  const { enquiries, projects, tasks, users, dailyReports, invoices, portalMode, currentUserId } = useAppStore();
+
+  useEffect(() => {
+    const currentUser = users.find((u) => u.id === currentUserId);
+    const isMemberEmail = currentUser?.email?.trim().toLowerCase().endsWith("@gmail.com");
+    if (portalMode !== "admin" || isMemberEmail) {
+      router.replace("/crm/member/dashboard");
+    }
+  }, [portalMode, currentUserId, users, router]);
 
   const newEnquiriesCount = enquiries.filter((e) => e.status === "New" || e.status === "Qualified").length;
   const activeProjectsCount = projects.filter((p) => p.status === "In Progress" || p.status === "At Risk").length;

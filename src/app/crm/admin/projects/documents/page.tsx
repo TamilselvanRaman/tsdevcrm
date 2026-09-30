@@ -772,12 +772,11 @@ export default function QuotationsAndAgreementsPage() {
       {isWizardOpen && (
         <div
           onClick={() => setIsWizardOpen(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-2xs p-4 overflow-y-auto"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-2xs p-4"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-4xl rounded-2xl border border-[#E2E8F0] bg-white shadow-2xl my-8 flex flex-col overflow-hidden"
-            style={{ maxHeight: "90vh" }}
+            className="w-full max-w-4xl rounded-2xl border border-[#E2E8F0] bg-white shadow-2xl flex flex-col overflow-hidden max-h-[90vh]"
           >
             {/* ── Dark Header with Type Switcher ─────────────────── */}
             <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-slate-900 to-slate-800 text-white shrink-0">
@@ -1352,8 +1351,8 @@ export default function QuotationsAndAgreementsPage() {
       {/* Renders exact Quotation.pdf or Muthupandi_Matrimony_Service_Agreement.pdf  */}
       {/* ========================================================================= */}
       {previewDoc && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-2xs p-4 overflow-y-auto">
-          <div className="w-full max-w-4xl rounded-2xl border border-[#E2E8F0] bg-white p-6 sm:p-8 shadow-2xl my-8 space-y-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-2xs p-4">
+          <div className="w-full max-w-4xl rounded-2xl border border-[#E2E8F0] bg-white p-6 sm:p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
             {/* Modal Controls */}
             <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4 print:hidden">
               <div className="flex items-center gap-2">

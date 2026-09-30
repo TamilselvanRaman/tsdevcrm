@@ -15,8 +15,10 @@ import {
   Check,
   UserPlus,
   ArrowRight,
+  ChevronDown,
   X,
 } from "lucide-react";
+import { clsx } from "clsx";
 import { useAppStore } from "@/store/useAppStore";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -25,18 +27,184 @@ import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FollowUpItem } from "@/types";
 
+const FOLLOWUP_STATUS_CONFIG: Record<
+  FollowUpItem["status"],
+  {
+    label: string;
+    dot: string;
+    bg: string;
+    text: string;
+    border: string;
+    hoverBg: string;
+  }
+> = {
+  Scheduled: {
+    label: "Scheduled",
+    dot: "bg-blue-500 ring-2 ring-blue-200",
+    bg: "bg-blue-50/90",
+    text: "text-blue-700",
+    border: "border-blue-200",
+    hoverBg: "hover:bg-blue-100/80 hover:border-blue-300",
+  },
+  Interested: {
+    label: "Interested",
+    dot: "bg-emerald-500 ring-2 ring-emerald-200",
+    bg: "bg-emerald-50/90",
+    text: "text-emerald-700",
+    border: "border-emerald-200",
+    hoverBg: "hover:bg-emerald-100/80 hover:border-emerald-300",
+  },
+  Ghosting: {
+    label: "Ghosting (No Reply)",
+    dot: "bg-purple-500 ring-2 ring-purple-200",
+    bg: "bg-purple-50/90",
+    text: "text-purple-700",
+    border: "border-purple-200",
+    hoverBg: "hover:bg-purple-100/80 hover:border-purple-300",
+  },
+  Lost: {
+    label: "Deal Lost",
+    dot: "bg-red-500 ring-2 ring-red-200",
+    bg: "bg-red-50/90",
+    text: "text-red-700",
+    border: "border-red-200",
+    hoverBg: "hover:bg-red-100/80 hover:border-red-300",
+  },
+  Completed: {
+    label: "Completed",
+    dot: "bg-emerald-600 ring-2 ring-emerald-300",
+    bg: "bg-emerald-100/90",
+    text: "text-emerald-800",
+    border: "border-emerald-300",
+    hoverBg: "hover:bg-emerald-200/80 hover:border-emerald-400",
+  },
+  Overdue: {
+    label: "Overdue",
+    dot: "bg-rose-500 ring-2 ring-rose-200",
+    bg: "bg-rose-50/90",
+    text: "text-rose-700",
+    border: "border-rose-200",
+    hoverBg: "hover:bg-rose-100/80 hover:border-rose-300",
+  },
+  Rescheduled: {
+    label: "Rescheduled",
+    dot: "bg-amber-500 ring-2 ring-amber-200",
+    bg: "bg-amber-50/90",
+    text: "text-amber-700",
+    border: "border-amber-200",
+    hoverBg: "hover:bg-amber-100/80 hover:border-amber-300",
+  },
+};
+
+interface FollowUpStatusDropdownProps {
+  currentStatus: FollowUpItem["status"];
+  onStatusChange: (status: FollowUpItem["status"]) => void;
+  isOpen: boolean;
+  onToggle: (e: React.MouseEvent) => void;
+  onClose: () => void;
+  isDisabled?: boolean;
+}
+
+function FollowUpStatusDropdown({
+  currentStatus,
+  onStatusChange,
+  isOpen,
+  onToggle,
+  onClose,
+  isDisabled = false,
+}: FollowUpStatusDropdownProps) {
+  const current = FOLLOWUP_STATUS_CONFIG[currentStatus] || FOLLOWUP_STATUS_CONFIG.Scheduled;
+  const statuses: FollowUpItem["status"][] = [
+    "Scheduled",
+    "Interested",
+    "Ghosting",
+    "Lost",
+    "Rescheduled",
+    "Completed",
+    "Overdue",
+  ];
+
+  return (
+    <div className="relative inline-block text-left" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        disabled={isDisabled}
+        onClick={onToggle}
+        className={clsx(
+          "group inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-all duration-150 shadow-2xs cursor-pointer select-none disabled:opacity-70 disabled:cursor-not-allowed",
+          current.bg,
+          current.text,
+          current.border,
+          current.hoverBg,
+          isOpen ? "ring-2 ring-blue-500/25 shadow-xs scale-[1.02]" : ""
+        )}
+      >
+        <span className={clsx("h-1.5 w-1.5 rounded-full shrink-0 transition-transform group-hover:scale-110", current.dot)} />
+        <span className="leading-tight">{current.label}</span>
+        {!isDisabled && (
+          <ChevronDown
+            className={clsx(
+              "h-3 w-3 opacity-70 transition-transform duration-200 shrink-0",
+              isOpen ? "rotate-180 opacity-100" : "group-hover:opacity-100"
+            )}
+          />
+        )}
+      </button>
+
+      {isOpen && !isDisabled && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={onClose} />
+          <div className="absolute left-0 top-full mt-1.5 z-50 w-48 origin-top-left rounded-xl border border-[#E2E8F0] bg-white p-1.5 shadow-xl shadow-slate-900/10 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-2 py-1 text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider">
+              Update Follow-Up Status
+            </div>
+            <div className="space-y-0.5 mt-0.5">
+              {statuses.map((st) => {
+                const cfg = FOLLOWUP_STATUS_CONFIG[st];
+                const isSelected = st === currentStatus;
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => {
+                      onStatusChange(st);
+                      onClose();
+                    }}
+                    className={clsx(
+                      "flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors text-left cursor-pointer",
+                      isSelected
+                        ? `${cfg.bg} ${cfg.text} font-semibold border ${cfg.border}`
+                        : "text-[#334155] hover:bg-[#F8FAFC] hover:text-[#0F172A]"
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={clsx("h-2 w-2 rounded-full shrink-0", cfg.dot)} />
+                      <span>{cfg.label}</span>
+                    </div>
+                    {isSelected && <Check className="h-3.5 w-3.5 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function FollowUpsPage() {
-  const { followUps, addFollowUp, updateFollowUp, deleteFollowUp, enquiries, users } = useAppStore();
-  const [filterTab, setFilterTab] = useState<"Today" | "Upcoming" | "Overdue" | "Completed" | "All">("All");
+  const { followUps, addFollowUp, updateFollowUp, deleteFollowUp, convertFollowUpToClient, enquiries, users } = useAppStore();
+  const [filterTab, setFilterTab] = useState<"Today" | "Upcoming" | "Overdue" | "Completed" | "All" | "All History">("All");
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingFollowUp, setEditingFollowUp] = useState<FollowUpItem | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [activeDropdownFollowUpId, setActiveDropdownFollowUpId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState("");
 
   // Move to Client State
   const [moveToClientFollowUp, setMoveToClientFollowUp] = useState<FollowUpItem | null>(null);
-  const { addClient } = useAppStore();
   const [newClientCompany, setNewClientCompany] = useState("");
   const [newClientContact, setNewClientContact] = useState("");
   const [newClientEmail, setNewClientEmail] = useState("");
@@ -50,7 +218,7 @@ export default function FollowUpsPage() {
   const [type, setType] = useState<FollowUpItem["type"]>("Phone Call");
   const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().split("T")[0]);
   const [scheduledTime, setScheduledTime] = useState("11:00 AM");
-  const [assignedTo, setAssignedTo] = useState(users[0]?.fullName || "Tamil Selvan R");
+  const [assignedTo, setAssignedTo] = useState(users[0]?.fullName || "Unassigned");
   const [purpose, setPurpose] = useState("");
 
   // Edit Form State
@@ -76,7 +244,7 @@ export default function FollowUpsPage() {
     setType("Phone Call");
     setScheduledDate(new Date().toISOString().split("T")[0]);
     setScheduledTime("11:00 AM");
-    setAssignedTo(users[0]?.fullName || "Tamil Selvan R");
+    setAssignedTo(users[0]?.fullName || "Unassigned");
     setPurpose("");
     setIsAddModalOpen(true);
   };
@@ -102,6 +270,10 @@ export default function FollowUpsPage() {
   };
 
   const handleOpenEditModal = (item: FollowUpItem) => {
+    if (item.isLocked) {
+      showToast("🔒 Follow-up is locked (already converted to Client).");
+      return;
+    }
     setEditingFollowUp(item);
     setEditLeadName(item.leadName);
     setEditBusinessName(item.businessName);
@@ -147,41 +319,50 @@ export default function FollowUpsPage() {
   };
 
   const handleOpenMoveToClientModal = (item: FollowUpItem) => {
+    if (item.isLocked) {
+      showToast("🔒 Follow-up already converted to Client.");
+      return;
+    }
+
+    const matchingEnquiry = enquiries.find(
+      (e) => e.id === item.leadId || e.clientName.toLowerCase() === item.leadName.toLowerCase()
+    );
+
+    const autoEmail =
+      matchingEnquiry?.email ||
+      `${item.leadName.trim().toLowerCase().replace(/[^a-z0-9]/g, ".")}@gmail.com`;
+
     setMoveToClientFollowUp(item);
-    setNewClientCompany(item.businessName || "");
-    setNewClientContact(item.leadName || "");
-    setNewClientEmail("");
-    setNewClientPhone(item.contactNumber || "");
-    setNewClientCategory("Software Development");
+    setNewClientCompany(item.businessName || matchingEnquiry?.company || item.leadName);
+    setNewClientContact(item.leadName || matchingEnquiry?.clientName || "Client Contact");
+    setNewClientEmail(autoEmail);
+    setNewClientPhone(item.contactNumber || matchingEnquiry?.phone || "+91 98765 00000");
+    setNewClientCategory(matchingEnquiry?.projectType || "Software Development");
   };
 
   const handleMoveToClient = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!moveToClientFollowUp || !newClientCompany.trim() || !newClientContact.trim()) return;
+    if (!moveToClientFollowUp) return;
 
-    addClient({
-      companyName: newClientCompany.trim(),
-      primaryContact: newClientContact.trim(),
-      email: newClientEmail.trim() || "contact@client.com",
-      phone: newClientPhone.trim(),
-      address: "Not Provided",
+    convertFollowUpToClient(moveToClientFollowUp.id, {
+      companyName: newClientCompany.trim() || moveToClientFollowUp.businessName,
+      primaryContact: newClientContact.trim() || moveToClientFollowUp.leadName,
+      email: newClientEmail.trim() || `${moveToClientFollowUp.leadName.toLowerCase().replace(/[^a-z0-9]/g, ".")}@gmail.com`,
+      phone: newClientPhone.trim() || moveToClientFollowUp.contactNumber,
       category: newClientCategory,
-      assignedManager: moveToClientFollowUp.assignedTo,
-      totalProjects: 0,
-      totalBilled: 0,
-      totalCollected: 0,
-      outstanding: 0,
-      status: "Active",
     });
 
-    updateFollowUp(moveToClientFollowUp.id, { status: "Completed" });
     setMoveToClientFollowUp(null);
-    showToast(`Converted ${newClientContact} to Client!`);
+    showToast(`🎉 Converted ${newClientContact || moveToClientFollowUp.leadName} to Client profile!`);
   };
 
   const todayStr = new Date().toISOString().split("T")[0];
 
   const filteredFollowUps = followUps.filter((f) => {
+    // Hide converted follow-ups from active view once advanced to Client stage (remains safely stored in DB)
+    const isConverted = f.isLocked || f.stageStatus === "Client" || f.stageStatus === "Project" || !!f.convertedClientId;
+    if (isConverted && filterTab !== "All History") return false;
+
     if (filterTab === "All") return true;
     if (filterTab === "Today") return f.scheduledDate === todayStr;
     if (filterTab === "Upcoming") return f.scheduledDate > todayStr && f.status !== "Completed";
@@ -245,7 +426,24 @@ export default function FollowUpsPage() {
       header: "Status",
       accessorKey: "status",
       sortable: true,
-      cell: (row) => <StatusBadge status={row.status} />,
+      cell: (row) => (
+        <FollowUpStatusDropdown
+          currentStatus={row.status}
+          onStatusChange={(newStatus) => {
+            updateFollowUp(row.id, { status: newStatus });
+            showToast(`Status updated to "${newStatus}"`);
+          }}
+          isOpen={activeDropdownFollowUpId === row.id}
+          onToggle={(e) => {
+            e.stopPropagation();
+            if (!row.isLocked) {
+              setActiveDropdownFollowUpId(activeDropdownFollowUpId === row.id ? null : row.id);
+            }
+          }}
+          onClose={() => setActiveDropdownFollowUpId(null)}
+          isDisabled={row.isLocked}
+        />
+      ),
     },
     {
       id: "actions",
@@ -253,38 +451,46 @@ export default function FollowUpsPage() {
       align: "right",
       cell: (row) => (
         <div className="flex items-center justify-end gap-1.5">
-          {row.status !== "Completed" && (
-            <button
-              onClick={() => handleMarkDone(row.id, row.leadName)}
-              title="Mark as Completed"
-              className="flex items-center gap-1 px-2 py-1 text-xs font-semibold text-[#16A34A] hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-            >
-              <Check className="h-3.5 w-3.5" />
-              <span>Done</span>
-            </button>
+          {row.isLocked ? (
+            <span className="px-2 py-1 text-xs font-bold rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+              🔒 Client Converted
+            </span>
+          ) : (
+            <>
+              {row.status !== "Completed" && (
+                <button
+                  onClick={() => handleMarkDone(row.id, row.leadName)}
+                  title="Mark as Completed"
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-semibold text-[#16A34A] hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  <span>Done</span>
+                </button>
+              )}
+              <button
+                onClick={() => handleOpenMoveToClientModal(row)}
+                title="Move to Client"
+                className="flex items-center gap-1 px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                <span>To Client</span>
+              </button>
+              <button
+                onClick={() => handleOpenEditModal(row)}
+                title="Edit Follow-up"
+                className="p-1.5 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+              >
+                <Edit2 className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setDeletingId(row.id)}
+                title="Delete Follow-up"
+                className="p-1.5 text-[#64748B] hover:text-[#DC2626] hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </>
           )}
-          <button
-            onClick={() => handleOpenMoveToClientModal(row)}
-            title="Move to Client"
-            className="flex items-center gap-1 px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-          >
-            <UserPlus className="h-3.5 w-3.5" />
-            <span>To Client</span>
-          </button>
-          <button
-            onClick={() => handleOpenEditModal(row)}
-            title="Edit Follow-up"
-            className="p-1.5 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-          >
-            <Edit2 className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setDeletingId(row.id)}
-            title="Delete Follow-up"
-            className="p-1.5 text-[#64748B] hover:text-[#DC2626] hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
         </div>
       ),
     },
@@ -356,7 +562,7 @@ export default function FollowUpsPage() {
 
       {/* Filter Tabs */}
       <div className="flex flex-wrap items-center gap-1.5 border-b border-[#E2E8F0] pb-3">
-        {(["All", "Today", "Upcoming", "Overdue", "Completed"] as const).map((tab) => (
+        {(["All", "Today", "Upcoming", "Overdue", "Completed", "All History"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setFilterTab(tab)}
@@ -366,7 +572,7 @@ export default function FollowUpsPage() {
                 : "text-[#64748B] hover:bg-slate-100 hover:text-[#0F172A]"
             }`}
           >
-            {tab}
+            {tab === "All" ? "Active Follow-ups" : tab === "All History" ? "🔒 All History (Inc. Converted)" : tab}
           </button>
         ))}
       </div>

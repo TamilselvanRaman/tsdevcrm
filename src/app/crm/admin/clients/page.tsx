@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Building2,
   Plus,
@@ -13,6 +14,8 @@ import {
   Trash2,
   MapPin,
   CheckCircle2,
+  FolderPlus,
+  ArrowRight,
 } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { MetricCard } from "@/components/ui/MetricCard";
@@ -23,7 +26,45 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ClientRecord } from "@/types";
 
 export default function ClientsPage() {
-  const { clients, addClient, updateClient, deleteClient, users } = useAppStore();
+  const router = useRouter();
+  const { clients, addClient, updateClient, deleteClient, convertClientToProject, users } = useAppStore();
+
+  const [projectClient, setProjectClient] = useState<ClientRecord | null>(null);
+  const [prjName, setPrjName] = useState("");
+  const [prjBudget, setPrjBudget] = useState("150000");
+  const [prjDeadline, setPrjDeadline] = useState(new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0]);
+  const [prjPriority, setPrjPriority] = useState<"Low" | "Medium" | "High">("High");
+  const [prjDescription, setPrjDescription] = useState("");
+
+  const handleOpenProjectModal = (c: ClientRecord) => {
+    if (c.linkedProjectId) {
+      showToast(`🔒 Client already converted to project: ${c.linkedProjectName || "PRJ"}`);
+      return;
+    }
+    setProjectClient(c);
+    setPrjName(`${c.companyName} Web App & System`);
+    setPrjBudget((c.totalBilled || 150000).toString());
+    setPrjDeadline(new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0]);
+    setPrjPriority("High");
+    setPrjDescription(`Official project kick-off for ${c.companyName}. Primary contact: ${c.primaryContact}`);
+  };
+
+  const handleCreateProjectFromClient = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projectClient || !prjName.trim()) return;
+
+    convertClientToProject(projectClient.id, {
+      projectName: prjName.trim(),
+      budget: parseFloat(prjBudget) || projectClient.totalBilled || 0,
+      deadline: prjDeadline,
+      priority: prjPriority,
+      description: prjDescription.trim(),
+    });
+
+    setProjectClient(null);
+    showToast(`🎉 Project "${prjName}" created & linked to ${projectClient.companyName}!`);
+    setTimeout(() => router.push("/crm/admin/projects"), 1200);
+  };
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<ClientRecord | null>(null);
@@ -37,7 +78,7 @@ export default function ClientsPage() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [category, setCategory] = useState("Software Development");
-  const [assignedManager, setAssignedManager] = useState(users[0]?.fullName || "Tamil Selvan R");
+  const [assignedManager, setAssignedManager] = useState(users[0]?.fullName || "Unassigned");
 
   // Edit Form State
   const [editCompanyName, setEditCompanyName] = useState("");
@@ -61,7 +102,7 @@ export default function ClientsPage() {
     setPhone("");
     setAddress("");
     setCategory("Software Development");
-    setAssignedManager(users[0]?.fullName || "Tamil Selvan R");
+    setAssignedManager(users[0]?.fullName || "Unassigned");
     setIsAddModalOpen(true);
   };
 
@@ -76,7 +117,7 @@ export default function ClientsPage() {
       phone: phone.trim() || "+91 98765 00000",
       address: address.trim(),
       category,
-      assignedManager: assignedManager || users[0]?.fullName || "Tamil Selvan R",
+      assignedManager: assignedManager || users[0]?.fullName || "Unassigned",
       totalProjects: 0,
       totalBilled: 0,
       totalCollected: 0,
@@ -205,7 +246,26 @@ export default function ClientsPage() {
       header: "Actions",
       align: "right",
       cell: (row) => (
-        <div className="flex items-center justify-end gap-1">
+        <div className="flex items-center justify-end gap-1.5">
+          {row.linkedProjectId ? (
+            <button
+              onClick={() => router.push("/crm/admin/projects")}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition-colors cursor-pointer"
+              title="View Linked Project"
+            >
+              <span>🔒 Active Project</span>
+              <ArrowRight className="h-3 w-3" />
+            </button>
+          ) : (
+            <button
+              onClick={() => handleOpenProjectModal(row)}
+              title="Move to Project Section"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs transition-colors cursor-pointer"
+            >
+              <FolderPlus className="h-3.5 w-3.5" />
+              <span>Create Project</span>
+            </button>
+          )}
           <button
             onClick={() => handleOpenEditModal(row)}
             title="Edit Client"
@@ -554,6 +614,104 @@ export default function ClientsPage() {
                   className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
                 />
               </div>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Kickoff Project Modal */}
+      {projectClient && (
+        <Modal
+          isOpen={!!projectClient}
+          onClose={() => setProjectClient(null)}
+          title={`🚀 Create Project for ${projectClient.companyName}`}
+          footer={
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setProjectClient(null)}
+                className="rounded-xl border border-[#E2E8F0] px-4 py-2 text-xs font-semibold text-[#64748B] hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="create-project-form"
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 shadow-sm transition-colors cursor-pointer"
+              >
+                Launch Project Section
+              </button>
+            </div>
+          }
+        >
+          <form id="create-project-form" onSubmit={handleCreateProjectFromClient} className="space-y-4 text-xs">
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-1">
+              <div className="font-bold flex items-center gap-1.5">
+                <Building2 className="h-4 w-4 text-emerald-600" />
+                <span>Client Account: {projectClient.companyName}</span>
+              </div>
+              <div className="text-[11px] text-emerald-700">
+                Contact: {projectClient.primaryContact} ({projectClient.phone})
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#0F172A] mb-1">Project Name *</label>
+              <input
+                type="text"
+                required
+                value={prjName}
+                onChange={(e) => setPrjName(e.target.value)}
+                placeholder="e.g. Mobile App & Dashboard Redesign"
+                className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-[#0F172A] mb-1">Project Budget (₹)</label>
+                <input
+                  type="number"
+                  value={prjBudget}
+                  onChange={(e) => setPrjBudget(e.target.value)}
+                  className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#0F172A] mb-1">Deadline Date</label>
+                <input
+                  type="date"
+                  required
+                  value={prjDeadline}
+                  onChange={(e) => setPrjDeadline(e.target.value)}
+                  className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#0F172A] mb-1">Priority Level</label>
+                <select
+                  value={prjPriority}
+                  onChange={(e) => setPrjPriority(e.target.value as "Low" | "Medium" | "High")}
+                  className="w-full rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-xs text-[#0F172A] focus:outline-hidden"
+                >
+                  <option value="Low">Low Priority</option>
+                  <option value="Medium">Medium Priority</option>
+                  <option value="High">High Priority</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#0F172A] mb-1">Project Requirements & Scope</label>
+              <textarea
+                rows={3}
+                value={prjDescription}
+                onChange={(e) => setPrjDescription(e.target.value)}
+                placeholder="Outline core deliverables, modules, and scope..."
+                className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-xs text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+              />
             </div>
           </form>
         </Modal>

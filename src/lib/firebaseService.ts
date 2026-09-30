@@ -53,6 +53,35 @@ export const COLLECTIONS = {
   TEAMS: "teams",
 } as const;
 
+const handleSubError = (name: string, err: any) => {
+  if (err?.code === "permission-denied" || err?.message?.includes("insufficient permissions")) {
+    // Silent debug log for missing or unauthenticated rules; fallback data will remain in store
+    console.debug(`Firestore ${name} subscription offline (permissions/auth notice)`);
+  } else {
+    console.warn(`Firestore ${name} subscription notice:`, err?.message || err);
+  }
+};
+
+function cleanObject<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const result: Record<string, any> = {};
+  if (!obj || typeof obj !== "object") return obj;
+  for (const key of Object.keys(obj)) {
+    const value = obj[key];
+    if (value !== undefined) {
+      if (value !== null && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
+        result[key] = cleanObject(value);
+      } else if (Array.isArray(value)) {
+        result[key] = value.map((item) =>
+          item !== null && typeof item === "object" ? cleanObject(item) : item
+        );
+      } else {
+        result[key] = value;
+      }
+    }
+  }
+  return result;
+}
+
 // ============================================================================
 // 1. ENQUIRIES SERVICE
 // ============================================================================
@@ -65,15 +94,17 @@ export const subscribeEnquiries = (onData: (data: Enquiry[]) => void): Unsubscri
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as Enquiry));
       onData(list);
     },
-    (err) => {
-      console.warn("Firestore enquiries subscription notice (fallback to local):", err.message);
-    }
+    (err) => handleSubError("enquiries", err)
   );
 };
 
 export const saveEnquiry = async (enquiry: Enquiry): Promise<void> => {
-  const ref = doc(db, COLLECTIONS.ENQUIRIES, enquiry.id);
-  await setDoc(ref, enquiry, { merge: true });
+  try {
+    const ref = doc(db, COLLECTIONS.ENQUIRIES, enquiry.id);
+    await setDoc(ref, cleanObject(enquiry), { merge: true });
+  } catch (err) {
+    console.error("Firestore saveEnquiry error:", err);
+  }
 };
 
 export const deleteEnquiry = async (id: string): Promise<void> => {
@@ -92,15 +123,17 @@ export const subscribeProjects = (onData: (data: Project[]) => void): Unsubscrib
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as Project));
       onData(list);
     },
-    (err) => {
-      console.warn("Firestore projects subscription notice:", err.message);
-    }
+    (err) => handleSubError("projects", err)
   );
 };
 
 export const saveProject = async (project: Project): Promise<void> => {
-  const ref = doc(db, COLLECTIONS.PROJECTS, project.id);
-  await setDoc(ref, project, { merge: true });
+  try {
+    const ref = doc(db, COLLECTIONS.PROJECTS, project.id);
+    await setDoc(ref, cleanObject(project), { merge: true });
+  } catch (err) {
+    console.error("Firestore saveProject error:", err);
+  }
 };
 
 export const deleteProject = async (id: string): Promise<void> => {
@@ -119,15 +152,17 @@ export const subscribeTasks = (onData: (data: Task[]) => void): Unsubscribe => {
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as Task));
       onData(list);
     },
-    (err) => {
-      console.warn("Firestore tasks subscription notice:", err.message);
-    }
+    (err) => handleSubError("tasks", err)
   );
 };
 
 export const saveTask = async (task: Task): Promise<void> => {
-  const ref = doc(db, COLLECTIONS.TASKS, task.id);
-  await setDoc(ref, task, { merge: true });
+  try {
+    const ref = doc(db, COLLECTIONS.TASKS, task.id);
+    await setDoc(ref, cleanObject(task), { merge: true });
+  } catch (err) {
+    console.error("Firestore saveTask error:", err);
+  }
 };
 
 export const deleteTask = async (id: string): Promise<void> => {
@@ -146,15 +181,17 @@ export const subscribeUsers = (onData: (data: User[]) => void): Unsubscribe => {
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as User));
       onData(list);
     },
-    (err) => {
-      console.warn("Firestore users subscription notice:", err.message);
-    }
+    (err) => handleSubError("users", err)
   );
 };
 
 export const saveUser = async (user: User): Promise<void> => {
-  const ref = doc(db, COLLECTIONS.USERS, user.id);
-  await setDoc(ref, user, { merge: true });
+  try {
+    const ref = doc(db, COLLECTIONS.USERS, user.id);
+    await setDoc(ref, cleanObject(user), { merge: true });
+  } catch (err) {
+    console.error("Firestore saveUser error:", err);
+  }
 };
 
 // ============================================================================
@@ -169,15 +206,17 @@ export const subscribeDailyReports = (onData: (data: DailyWorkReport[]) => void)
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as DailyWorkReport));
       onData(list);
     },
-    (err) => {
-      console.warn("Firestore daily reports subscription notice:", err.message);
-    }
+    (err) => handleSubError("daily_reports", err)
   );
 };
 
 export const saveDailyReport = async (report: DailyWorkReport): Promise<void> => {
-  const ref = doc(db, COLLECTIONS.DAILY_REPORTS, report.id);
-  await setDoc(ref, report, { merge: true });
+  try {
+    const ref = doc(db, COLLECTIONS.DAILY_REPORTS, report.id);
+    await setDoc(ref, cleanObject(report), { merge: true });
+  } catch (err) {
+    console.error("Firestore saveDailyReport error:", err);
+  }
 };
 
 export const deleteDailyReport = async (id: string): Promise<void> => {
@@ -193,15 +232,17 @@ export const subscribeAttendance = (onData: (data: AttendanceRecord[]) => void):
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as AttendanceRecord));
       onData(list);
     },
-    (err) => {
-      console.warn("Firestore attendance subscription notice:", err.message);
-    }
+    (err) => handleSubError("attendance", err)
   );
 };
 
 export const saveAttendance = async (rec: AttendanceRecord): Promise<void> => {
-  const ref = doc(db, COLLECTIONS.ATTENDANCE, rec.id);
-  await setDoc(ref, rec, { merge: true });
+  try {
+    const ref = doc(db, COLLECTIONS.ATTENDANCE, rec.id);
+    await setDoc(ref, cleanObject(rec), { merge: true });
+  } catch (err) {
+    console.error("Firestore saveAttendance error:", err);
+  }
 };
 
 export const deleteAttendance = async (id: string): Promise<void> => {
@@ -220,15 +261,17 @@ export const subscribeInvoices = (onData: (data: Invoice[]) => void): Unsubscrib
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as Invoice));
       onData(list);
     },
-    (err) => {
-      console.warn("Firestore invoices subscription notice:", err.message);
-    }
+    (err) => handleSubError("invoices", err)
   );
 };
 
 export const saveInvoice = async (inv: Invoice): Promise<void> => {
-  const ref = doc(db, COLLECTIONS.INVOICES, inv.id);
-  await setDoc(ref, inv, { merge: true });
+  try {
+    const ref = doc(db, COLLECTIONS.INVOICES, inv.id);
+    await setDoc(ref, cleanObject(inv), { merge: true });
+  } catch (err) {
+    console.error("Firestore saveInvoice error:", err);
+  }
 };
 
 export const deleteInvoice = async (id: string): Promise<void> => {
@@ -247,15 +290,17 @@ export const subscribeDocuments = (onData: (data: ProjectDocument[]) => void): U
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as ProjectDocument));
       onData(list);
     },
-    (err) => {
-      console.warn("Firestore documents subscription notice:", err.message);
-    }
+    (err) => handleSubError("documents", err)
   );
 };
 
 export const saveDocument = async (docObj: ProjectDocument): Promise<void> => {
-  const ref = doc(db, COLLECTIONS.DOCUMENTS, docObj.id);
-  await setDoc(ref, docObj, { merge: true });
+  try {
+    const ref = doc(db, COLLECTIONS.DOCUMENTS, docObj.id);
+    await setDoc(ref, cleanObject(docObj), { merge: true });
+  } catch (err) {
+    console.error("Firestore saveDocument error:", err);
+  }
 };
 
 export const deleteDocument = async (id: string): Promise<void> => {
@@ -274,15 +319,17 @@ export const subscribeClients = (onData: (data: ClientRecord[]) => void): Unsubs
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as ClientRecord));
       onData(list);
     },
-    (err) => {
-      console.warn("Firestore clients subscription notice:", err.message);
-    }
+    (err) => handleSubError("clients", err)
   );
 };
 
 export const saveClient = async (client: ClientRecord): Promise<void> => {
-  const ref = doc(db, COLLECTIONS.CLIENTS, client.id);
-  await setDoc(ref, client, { merge: true });
+  try {
+    const ref = doc(db, COLLECTIONS.CLIENTS, client.id);
+    await setDoc(ref, cleanObject(client), { merge: true });
+  } catch (err) {
+    console.error("Firestore saveClient error:", err);
+  }
 };
 
 export const deleteClient = async (id: string): Promise<void> => {
@@ -301,15 +348,17 @@ export const subscribeExpenses = (onData: (data: ExpenseRecord[]) => void): Unsu
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as ExpenseRecord));
       onData(list);
     },
-    (err) => {
-      console.warn("Firestore expenses subscription notice:", err.message);
-    }
+    (err) => handleSubError("expenses", err)
   );
 };
 
 export const saveExpense = async (expense: ExpenseRecord): Promise<void> => {
-  const ref = doc(db, COLLECTIONS.EXPENSES, expense.id);
-  await setDoc(ref, expense, { merge: true });
+  try {
+    const ref = doc(db, COLLECTIONS.EXPENSES, expense.id);
+    await setDoc(ref, cleanObject(expense), { merge: true });
+  } catch (err) {
+    console.error("Firestore saveExpense error:", err);
+  }
 };
 
 export const deleteExpense = async (id: string): Promise<void> => {
@@ -328,15 +377,17 @@ export const subscribeNotes = (onData: (data: NoteItem[]) => void): Unsubscribe 
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as NoteItem));
       onData(list);
     },
-    (err) => {
-      console.warn("Firestore notes subscription notice:", err.message);
-    }
+    (err) => handleSubError("notes", err)
   );
 };
 
 export const saveNote = async (note: NoteItem): Promise<void> => {
-  const ref = doc(db, COLLECTIONS.NOTES, note.id);
-  await setDoc(ref, note, { merge: true });
+  try {
+    const ref = doc(db, COLLECTIONS.NOTES, note.id);
+    await setDoc(ref, cleanObject(note), { merge: true });
+  } catch (err) {
+    console.error("Firestore saveNote error:", err);
+  }
 };
 
 export const deleteNote = async (id: string): Promise<void> => {
@@ -355,15 +406,17 @@ export const subscribeNotices = (onData: (data: NoticeItem[]) => void): Unsubscr
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as NoticeItem));
       onData(list);
     },
-    (err) => {
-      console.warn("Firestore notices subscription notice:", err.message);
-    }
+    (err) => handleSubError("notices", err)
   );
 };
 
 export const saveNotice = async (notice: NoticeItem): Promise<void> => {
-  const ref = doc(db, COLLECTIONS.NOTICES, notice.id);
-  await setDoc(ref, notice, { merge: true });
+  try {
+    const ref = doc(db, COLLECTIONS.NOTICES, notice.id);
+    await setDoc(ref, cleanObject(notice), { merge: true });
+  } catch (err) {
+    console.error("Firestore saveNotice error:", err);
+  }
 };
 
 export const deleteNotice = async (id: string): Promise<void> => {
@@ -382,15 +435,17 @@ export const subscribeFollowUps = (onData: (data: FollowUpItem[]) => void): Unsu
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as FollowUpItem));
       onData(list);
     },
-    (err) => {
-      console.warn("Firestore followups subscription notice:", err.message);
-    }
+    (err) => handleSubError("follow_ups", err)
   );
 };
 
 export const saveFollowUp = async (followUp: FollowUpItem): Promise<void> => {
-  const ref = doc(db, COLLECTIONS.FOLLOW_UPS, followUp.id);
-  await setDoc(ref, followUp, { merge: true });
+  try {
+    const ref = doc(db, COLLECTIONS.FOLLOW_UPS, followUp.id);
+    await setDoc(ref, cleanObject(followUp), { merge: true });
+  } catch (err) {
+    console.error("Firestore saveFollowUp error:", err);
+  }
 };
 
 export const deleteFollowUp = async (id: string): Promise<void> => {
@@ -409,9 +464,7 @@ export const subscribeTeams = (onData: (data: TeamGroup[]) => void): Unsubscribe
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as TeamGroup));
       onData(list);
     },
-    (err) => {
-      console.warn("Firestore teams subscription notice:", err.message);
-    }
+    (err) => handleSubError("teams", err)
   );
 };
 
