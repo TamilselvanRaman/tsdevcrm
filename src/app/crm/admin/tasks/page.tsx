@@ -30,7 +30,7 @@ import {
   Edit2,
   Trash2,
 } from "lucide-react";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore, SYSTEM_FALLBACK_USER } from "@/store/useAppStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { TaskStatus, TaskPriority, Task } from "@/types";
 import { clsx } from "clsx";
@@ -182,7 +182,7 @@ export default function TaskManagementPage() {
 
   const [activeDropdownTaskId, setActiveDropdownTaskId] = useState<string | null>(null);
 
-  const currentUser = users.find((u) => u.id === currentUserId) || users[0];
+  const currentUser = users.find((u) => u.id === currentUserId) || users[0] || SYSTEM_FALLBACK_USER;
 
   const [viewMode, setViewMode] = useState<"board" | "list">("board");
   const [search, setSearch] = useState("");
@@ -1043,7 +1043,7 @@ export default function TaskManagementPage() {
                     rows={2}
                     value={newCommentText}
                     onChange={(e) => setNewCommentText(e.target.value)}
-                    placeholder={`Post comment as ${currentUser.fullName}...`}
+                    placeholder={`Post comment as ${currentUser?.fullName || "Admin"}...`}
                     className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-2.5 text-xs text-[#0F172A] placeholder-[#64748B] focus:bg-white focus:outline-hidden focus:border-[#2563EB]"
                   />
                   <div className="flex justify-end">

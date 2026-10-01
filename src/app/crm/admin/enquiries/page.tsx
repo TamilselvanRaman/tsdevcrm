@@ -34,7 +34,7 @@ import {
   CalendarCheck,
   ArrowRight,
 } from "lucide-react";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore, SYSTEM_FALLBACK_USER } from "@/store/useAppStore";
 import { EnquiryStatus, EnquiryPriority, Enquiry } from "@/types";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -215,7 +215,7 @@ export default function EnquiryListPage() {
     currentUserId,
   } = useAppStore();
 
-  const currentUser = users.find((u) => u.id === currentUserId) || users[0];
+  const currentUser = users.find((u) => u.id === currentUserId) || users[0] || SYSTEM_FALLBACK_USER;
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
@@ -466,7 +466,7 @@ export default function EnquiryListPage() {
   const handleAddNote = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newNoteText.trim() || !selectedEnquiryId) return;
-    addEnquiryNote(selectedEnquiryId, newNoteText.trim(), currentUser.fullName);
+    addEnquiryNote(selectedEnquiryId, newNoteText.trim(), currentUser?.fullName || "Admin");
     setNewNoteText("");
     showToast("Note added to lead record");
   };
@@ -736,27 +736,17 @@ export default function EnquiryListPage() {
                         </span>
                       </td>
                       {/* Interactive Status Selector Dropdown */}
-                      <td onClick={(e) => {
-                        if (enq.isLocked || enq.status !== "New") {
-                          e.stopPropagation();
-                          return;
-                        }
-                        e.stopPropagation();
-                      }}>
-                        <div className={enq.isLocked || enq.status !== "New" ? "pointer-events-none opacity-60" : ""}>
-                          <StatusDropdown
-                            currentStatus={enq.status}
-                            onStatusChange={(newStatus) => handleStatusChange(enq.id, newStatus)}
-                            isOpen={activeDropdownEnquiryId === enq.id}
-                            onToggle={(e) => {
-                              e.stopPropagation();
-                              if (!enq.isLocked && enq.status === "New") {
-                                setActiveDropdownEnquiryId(activeDropdownEnquiryId === enq.id ? null : enq.id);
-                              }
-                            }}
-                            onClose={() => setActiveDropdownEnquiryId(null)}
-                          />
-                        </div>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <StatusDropdown
+                          currentStatus={enq.status}
+                          onStatusChange={(newStatus) => handleStatusChange(enq.id, newStatus)}
+                          isOpen={activeDropdownEnquiryId === enq.id}
+                          onToggle={(e) => {
+                            e.stopPropagation();
+                            setActiveDropdownEnquiryId(activeDropdownEnquiryId === enq.id ? null : enq.id);
+                          }}
+                          onClose={() => setActiveDropdownEnquiryId(null)}
+                        />
                       </td>
                       <td className="text-[#64748B]">{enq.createdDate}</td>
                       <td onClick={(e) => e.stopPropagation()} className="text-right">
@@ -764,29 +754,27 @@ export default function EnquiryListPage() {
                           <button
                             type="button"
                             onClick={() => handleOpenFollowUpModal(enq)}
-                            disabled={enq.isLocked || enq.status !== "New"}
+                            disabled={enq.isLocked}
                             className="p-1.5 text-[#64748B] hover:text-[#7C3AED] hover:bg-purple-50 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                             title={enq.isLocked ? "Stage Locked" : "Schedule Follow-up"}
                           >
-                            <CalendarCheck className="h-3.5 w-3.5" />
+                            <CalendarCheck className="h-4 w-4" />
                           </button>
                           <button
                             type="button"
                             onClick={() => handleOpenEditModal(enq)}
-                            disabled={enq.isLocked || enq.status !== "New"}
-                            className="p-1.5 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                            title={enq.isLocked ? "Lead Locked" : "Edit Lead"}
+                            className="p-1.5 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                            title="Edit Lead"
                           >
-                            <Edit2 className="h-3.5 w-3.5" />
+                            <Edit2 className="h-4 w-4" />
                           </button>
                           <button
                             type="button"
                             onClick={() => setDeleteTarget(enq)}
-                            disabled={enq.isLocked || enq.status !== "New"}
-                            className="p-1.5 text-[#64748B] hover:text-[#DC2626] hover:bg-red-50 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                            title={enq.isLocked ? "Lead Locked" : "Delete Lead"}
+                            className="p-1.5 text-[#64748B] hover:text-[#DC2626] hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                            title="Delete Lead"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
                       </td>
@@ -885,7 +873,7 @@ export default function EnquiryListPage() {
                 </div>
               </div>
 
-              {/* Assigned Team Member Section ("Which one handle it") */}
+              {/* Assigned Team Member Section */}
               <div className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-2xs space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[#0F172A] flex items-center gap-1.5">
@@ -901,73 +889,104 @@ export default function EnquiryListPage() {
                       users.find((u) => u.id === selectedEnquiry.assignedTo)?.avatarUrl ||
                       "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"
                     }
-                    alt={selectedEnquiry.assignedToName}
-                    className="h-10 w-10 rounded-full object-cover border border-[#E2E8F0]"
+                    alt={selectedEnquiry.assignedToName || "Assignee"}
+                    className="h-10 w-10 rounded-full object-cover border border-[#E2E8F0] shadow-xs"
                   />
-                  <div className="flex-1">
+                  <div className="flex-1 relative">
                     <select
-                      value={selectedEnquiry.assignedTo}
+                      value={selectedEnquiry.assignedTo || "usr-001"}
                       onChange={(e) => handleAssigneeChange(selectedEnquiry.id, e.target.value)}
-                      className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-1.5 text-xs font-semibold text-[#0F172A] focus:outline-hidden focus:border-[#2563EB]"
+                      className="w-full appearance-none rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] pl-3 pr-8 py-2 text-xs font-bold text-[#0F172A] focus:outline-none focus:bg-white focus:border-[#2563EB] focus:ring-2 focus:ring-blue-100 cursor-pointer shadow-xs transition-all"
                     >
-                      {users.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.fullName} — ({u.role}, {u.team})
+                      {users.length > 0 ? (
+                        users.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.fullName} ({u.role} - {u.team})
+                          </option>
+                        ))
+                      ) : (
+                        <option value={selectedEnquiry.assignedTo || "usr-001"}>
+                          {selectedEnquiry.assignedToName || "Tamil Selvan"} (Admin)
                         </option>
-                      ))}
+                      )}
                     </select>
+                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#64748B] pointer-events-none" />
                   </div>
                 </div>
               </div>
 
-              {/* Lead Budget & Contact Info */}
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 rounded-lg border border-[#E2E8F0] bg-white space-y-1">
-                  <span className="text-[#64748B]">Estimated Budget</span>
-                  <div className="text-base font-bold text-[#0F172A]">
-                    ₹{selectedEnquiry.estimatedBudget.toLocaleString("en-IN")}
+              {/* Lead Commercials, Source & Follow-up Details */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div className="p-3 rounded-xl border border-[#E2E8F0] bg-white space-y-1">
+                  <span className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider block">Budget</span>
+                  <div className="text-sm font-bold text-[#0F172A]">
+                    ₹{Number(selectedEnquiry.estimatedBudget || 0).toLocaleString("en-IN")}
                   </div>
                 </div>
-                <div className="p-3 rounded-lg border border-[#E2E8F0] bg-white space-y-1">
-                  <span className="text-[#64748B]">Lead Source</span>
-                  <div className="text-sm font-semibold text-[#0F172A]">{selectedEnquiry.source}</div>
+                <div className="p-3 rounded-xl border border-[#E2E8F0] bg-white space-y-1">
+                  <span className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider block">Project Type</span>
+                  <div className="text-xs font-bold text-[#0F172A] truncate">
+                    {selectedEnquiry.projectType || "Website"}
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl border border-[#E2E8F0] bg-white space-y-1">
+                  <span className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider block">Source</span>
+                  <div className="text-xs font-bold text-[#0F172A] truncate">
+                    {selectedEnquiry.source || "Direct"}
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl border border-[#E2E8F0] bg-white space-y-1">
+                  <span className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider block">Follow-Up</span>
+                  <div className="text-xs font-bold text-[#2563EB] truncate">
+                    {selectedEnquiry.nextFollowUp || "Not set"}
+                  </div>
                 </div>
               </div>
 
               {/* Direct Communication Channels */}
-              <div className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3.5 space-y-2 text-xs">
+              <div className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3.5 space-y-2.5 text-xs">
                 <div className="font-bold text-[#0F172A] flex items-center justify-between">
-                  <span>Contact Channels</span>
+                  <span className="flex items-center gap-1.5">
+                    <Phone className="h-3.5 w-3.5 text-[#2563EB]" />
+                    Contact Channels
+                  </span>
                   {selectedEnquiry.location && (
-                    <span className="text-[11px] font-normal text-[#64748B] flex items-center gap-1">
-                      <MapPin className="h-3 w-3 text-[#2563EB]" />
-                      {selectedEnquiry.location}
+                    <span className="text-[11px] font-medium text-[#64748B] flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+                      <span className="truncate max-w-[200px]">{selectedEnquiry.location}</span>
                     </span>
                   )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[#0F172A]">
-                  <a
-                    href={`tel:${selectedEnquiry.phone}`}
-                    className="flex items-center gap-2 p-2 rounded-lg bg-white border border-[#E2E8F0] hover:bg-blue-50 transition-colors truncate"
-                  >
-                    <Phone className="h-3.5 w-3.5 text-[#2563EB] shrink-0" />
-                    <span className="truncate font-medium">{selectedEnquiry.phone || "No Phone"}</span>
-                  </a>
-                  <a
-                    href={`https://wa.me/${(selectedEnquiry.whatsapp || selectedEnquiry.phone || "").replace(/[^0-9]/g, "")}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 p-2 rounded-lg bg-white border border-[#E2E8F0] hover:bg-emerald-50 transition-colors truncate"
-                  >
-                    <MessageSquare className="h-3.5 w-3.5 text-[#16A34A] shrink-0" />
-                    <span className="truncate font-semibold text-[#16A34A]">
-                      {selectedEnquiry.whatsapp || selectedEnquiry.phone || "No WhatsApp"}
-                    </span>
-                  </a>
+                  {selectedEnquiry.phone && (
+                    <a
+                      href={`tel:${selectedEnquiry.phone}`}
+                      className="flex items-center gap-2 p-2.5 rounded-lg bg-white border border-[#E2E8F0] hover:bg-blue-50/70 hover:border-blue-200 transition-colors truncate"
+                      title="Call Phone"
+                    >
+                      <Phone className="h-3.5 w-3.5 text-[#2563EB] shrink-0" />
+                      <span className="truncate font-semibold">{selectedEnquiry.phone}</span>
+                    </a>
+                  )}
+                  {(selectedEnquiry.whatsapp || selectedEnquiry.phone) && (
+                    <a
+                      href={`https://wa.me/${(selectedEnquiry.whatsapp || selectedEnquiry.phone || "").replace(/[^0-9]/g, "")}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 p-2.5 rounded-lg bg-white border border-emerald-200 hover:bg-emerald-50 transition-colors truncate"
+                      title="Open WhatsApp Chat"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5 text-[#16A34A] shrink-0" />
+                      <span className="truncate font-bold text-[#16A34A]">
+                        {selectedEnquiry.whatsapp || selectedEnquiry.phone}
+                      </span>
+                    </a>
+                  )}
                   {selectedEnquiry.email && (
                     <a
                       href={`mailto:${selectedEnquiry.email}`}
-                      className="flex items-center gap-2 p-2 rounded-lg bg-white border border-[#E2E8F0] hover:bg-blue-50 transition-colors truncate"
+                      className="flex items-center gap-2 p-2.5 rounded-lg bg-white border border-[#E2E8F0] hover:bg-blue-50/70 hover:border-blue-200 transition-colors truncate"
+                      title="Send Email"
                     >
                       <Mail className="h-3.5 w-3.5 text-[#2563EB] shrink-0" />
                       <span className="truncate font-medium">{selectedEnquiry.email}</span>
@@ -977,26 +996,36 @@ export default function EnquiryListPage() {
               </div>
 
               {/* Scope & Requirement Full Card */}
-              <div className="rounded-xl border border-[#E2E8F0] bg-white p-4 space-y-2">
+              <div className="rounded-xl border border-[#E2E8F0] bg-white p-4 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
+                  <span className="text-xs font-bold text-[#0F172A] uppercase tracking-wider flex items-center gap-1.5">
+                    <Briefcase className="h-3.5 w-3.5 text-[#2563EB]" />
                     Project Scope & Requirements
                   </span>
                   {selectedEnquiry.expectedTimeline && (
-                    <span className="text-[11px] font-semibold text-[#2563EB] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                    <span className="text-[11px] font-semibold text-[#2563EB] bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200">
                       ⏱️ {selectedEnquiry.expectedTimeline}
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-[#0F172A] leading-relaxed font-medium bg-[#F8FAFC] p-3 rounded-lg border border-[#E2E8F0]">
-                  {selectedEnquiry.description || selectedEnquiry.requirement}
-                </p>
+                <div className="text-xs text-[#0F172A] leading-relaxed font-medium bg-[#F8FAFC] p-3 rounded-lg border border-[#E2E8F0] space-y-1.5">
+                  {selectedEnquiry.requirement && (
+                    <div className="font-bold text-[#0F172A]">
+                      🎯 {selectedEnquiry.requirement}
+                    </div>
+                  )}
+                  {selectedEnquiry.description && (
+                    <div className="text-[#475569] whitespace-pre-wrap">
+                      {selectedEnquiry.description}
+                    </div>
+                  )}
+                </div>
                 {selectedEnquiry.services && selectedEnquiry.services.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {selectedEnquiry.services.map((srv, idx) => (
                       <span
                         key={idx}
-                        className="px-2 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-700 rounded-md border border-slate-200"
+                        className="px-2.5 py-0.5 text-[10px] font-semibold bg-blue-50 text-[#2563EB] rounded-md border border-blue-200"
                       >
                         {srv}
                       </span>
@@ -1005,7 +1034,7 @@ export default function EnquiryListPage() {
                 )}
               </div>
 
-              {/* Notes & Activity Section ("What he do / add notes") */}
+              {/* Notes & Activity Section */}
               <div className="space-y-3 pt-2">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold text-[#0F172A] flex items-center gap-1.5">
@@ -1020,14 +1049,14 @@ export default function EnquiryListPage() {
                     rows={2}
                     value={newNoteText}
                     onChange={(e) => setNewNoteText(e.target.value)}
-                    placeholder={`Add update or note as ${currentUser.fullName}...`}
-                    className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-xs text-[#0F172A] placeholder-[#64748B] focus:bg-white focus:outline-hidden focus:border-[#2563EB]"
+                    placeholder={`Add update or note as ${currentUser?.fullName || "Admin"}...`}
+                    className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-xs text-[#0F172A] placeholder-[#64748B] focus:bg-white focus:outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-blue-100"
                   />
                   <div className="flex justify-end">
                     <button
                       type="submit"
                       disabled={!newNoteText.trim()}
-                      className="flex items-center gap-1.5 rounded-lg bg-[#2563EB] px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                      className="flex items-center gap-1.5 rounded-lg bg-[#2563EB] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors cursor-pointer"
                     >
                       <Send className="h-3.5 w-3.5" />
                       <span>Add Note</span>
@@ -1038,7 +1067,7 @@ export default function EnquiryListPage() {
                 {/* Notes Stream */}
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                   {(!selectedEnquiry.notes || selectedEnquiry.notes.length === 0) ? (
-                    <div className="p-3 text-center text-xs text-[#64748B] bg-[#F8FAFC] rounded-lg">
+                    <div className="p-3 text-center text-xs text-[#64748B] bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
                       No internal notes logged yet. Add the first note above.
                     </div>
                   ) : (
@@ -1058,20 +1087,33 @@ export default function EnquiryListPage() {
                 </div>
 
                 {/* Activity Feed */}
-                <div className="pt-2 border-t border-[#E2E8F0]">
-                  <span className="text-[11px] font-semibold text-[#64748B] block mb-2">
-                    Recent Activity History
-                  </span>
-                  <div className="space-y-1.5 text-xs">
-                    {selectedEnquiry.activities?.slice(0, 3).map((act) => (
-                      <div key={act.id} className="flex items-start gap-2 text-[#64748B]">
-                        <Clock className="h-3.5 w-3.5 text-[#2563EB] shrink-0 mt-0.5" />
-                        <div className="flex-1">
-                          <span className="text-[#0F172A]">{act.text}</span>
-                          <span className="text-[10px] block text-[#94A3B8]">{act.timestamp}</span>
-                        </div>
+                <div className="pt-3 border-t border-[#E2E8F0]">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-semibold text-[#64748B] flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5 text-[#2563EB]" />
+                      Recent Activity History ({selectedEnquiry.activities?.length || 0})
+                    </span>
+                    <span className="text-[10px] text-[#94A3B8]">Created: {selectedEnquiry.createdDate}</span>
+                  </div>
+                  <div className="space-y-1.5 text-xs max-h-40 overflow-y-auto pr-1">
+                    {(!selectedEnquiry.activities || selectedEnquiry.activities.length === 0) ? (
+                      <div className="text-[11px] text-[#94A3B8] italic p-2 bg-[#F8FAFC] rounded-lg">
+                        No activity recorded yet.
                       </div>
-                    ))}
+                    ) : (
+                      selectedEnquiry.activities.map((act) => (
+                        <div key={act.id} className="flex items-start gap-2.5 p-2 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
+                          <Clock className="h-3.5 w-3.5 text-[#2563EB] shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-semibold text-[#0F172A]">{act.text}</span>
+                              <span className="text-[10px] font-medium text-[#64748B]">{act.author || "Admin"}</span>
+                            </div>
+                            <span className="text-[10px] block text-[#94A3B8] mt-0.5">{act.timestamp}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
@@ -1354,7 +1396,7 @@ export default function EnquiryListPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   <div>
                     <label className="font-semibold text-[#0F172A] block mb-1">Phone / Mobile</label>
                     <div className="relative">
@@ -1362,9 +1404,26 @@ export default function EnquiryListPage() {
                       <input
                         type="text"
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
+                        onChange={(e) => {
+                          setPhone(e.target.value);
+                          if (!whatsapp || whatsapp === phone) setWhatsapp(e.target.value);
+                        }}
                         placeholder="+91 98765 43210"
-                        className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] pl-8 pr-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden font-medium"
+                        className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] pl-8 pr-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-blue-100 font-medium transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-[#0F172A] block mb-1">WhatsApp Number</label>
+                    <div className="relative">
+                      <MessageSquare className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-[#16A34A]" />
+                      <input
+                        type="text"
+                        value={whatsapp}
+                        onChange={(e) => setWhatsapp(e.target.value)}
+                        placeholder="+91 98765 43210"
+                        className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] pl-8 pr-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-blue-100 font-medium transition-all"
                       />
                     </div>
                   </div>
@@ -1378,7 +1437,7 @@ export default function EnquiryListPage() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="client@domain.com"
-                        className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] pl-8 pr-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden font-medium"
+                        className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] pl-8 pr-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-blue-100 font-medium transition-all"
                       />
                     </div>
                   </div>
@@ -1391,8 +1450,8 @@ export default function EnquiryListPage() {
                         type="text"
                         value={location}
                         onChange={(e) => setLocation(e.target.value)}
-                        placeholder="Chennai, India"
-                        className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] pl-8 pr-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden font-medium"
+                        placeholder="Chennai, Tamil Nadu"
+                        className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] pl-8 pr-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-blue-100 font-medium transition-all"
                       />
                     </div>
                   </div>
@@ -1417,8 +1476,8 @@ export default function EnquiryListPage() {
                     required
                     value={requirement}
                     onChange={(e) => setRequirement(e.target.value)}
-                    placeholder="e.g. Custom ERP with Flutter Mobile App & Payment Gateway"
-                    className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] placeholder-[#94A3B8] focus:bg-white focus:border-[#2563EB] focus:outline-hidden font-medium"
+                    placeholder="e.g. Need to call regarding taxi & travel booking app"
+                    className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] placeholder-[#94A3B8] focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-blue-100 font-medium transition-all"
                   />
                 </div>
 
@@ -1430,10 +1489,10 @@ export default function EnquiryListPage() {
                       value={projectType}
                       onChange={(e) => setProjectType(e.target.value)}
                       placeholder="e.g. Website + Mobile App"
-                      className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden font-medium"
+                      className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-blue-100 font-medium transition-all"
                     />
                     <div className="flex flex-wrap gap-1 mt-1.5">
-                      {["Web App", "Mobile App", "UI/UX", "Custom ERP", "E-Commerce"].map((type) => (
+                      {["Website", "Mobile App", "UI/UX Design", "Custom ERP", "E-Commerce"].map((type) => (
                         <button
                           key={type}
                           type="button"
@@ -1459,16 +1518,16 @@ export default function EnquiryListPage() {
                         type="number"
                         value={budget}
                         onChange={(e) => setBudget(e.target.value)}
-                        placeholder="150000"
-                        className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] pl-8 pr-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden font-bold"
+                        placeholder="0"
+                        className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] pl-8 pr-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-blue-100 font-bold transition-all"
                       />
                     </div>
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {[
+                        { label: "₹0", val: "0" },
                         { label: "₹50k", val: "50000" },
                         { label: "₹1.5L", val: "150000" },
                         { label: "₹3L", val: "300000" },
-                        { label: "₹5L+", val: "500000" },
                       ].map((item) => (
                         <button
                           key={item.val}
@@ -1491,18 +1550,21 @@ export default function EnquiryListPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="font-semibold text-[#0F172A] block mb-1">Lead Source</label>
-                    <select
-                      value={source}
-                      onChange={(e) => setSource(e.target.value)}
-                      className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden font-medium cursor-pointer"
-                    >
-                      <option value="Instagram">Instagram (Social Ad / DM)</option>
-                      <option value="Referral">Client Referral / Network</option>
-                      <option value="Website">Official Website Lead Form</option>
-                      <option value="LinkedIn">LinkedIn Outreach</option>
-                      <option value="Direct Call">Direct Phone Call / Walk-in</option>
-                      <option value="Upwork">Upwork / Freelance Platform</option>
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={source}
+                        onChange={(e) => setSource(e.target.value)}
+                        className="w-full appearance-none rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] pl-3 pr-8 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-blue-100 font-medium cursor-pointer shadow-xs transition-all"
+                      >
+                        <option value="Instagram">Instagram (Social Ad / DM)</option>
+                        <option value="Referral">Client Referral / Network</option>
+                        <option value="Website">Official Website Lead Form</option>
+                        <option value="LinkedIn">LinkedIn Outreach</option>
+                        <option value="Direct Call">Direct Phone Call / Walk-in</option>
+                        <option value="Upwork">Upwork / Freelance Platform</option>
+                      </select>
+                      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#64748B] pointer-events-none" />
+                    </div>
                   </div>
 
                   <div>
@@ -1512,7 +1574,7 @@ export default function EnquiryListPage() {
                       value={timeline}
                       onChange={(e) => setTimeline(e.target.value)}
                       placeholder="e.g. 4 Weeks"
-                      className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden font-medium"
+                      className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-blue-100 font-medium transition-all"
                     />
                   </div>
                 </div>
@@ -1530,46 +1592,59 @@ export default function EnquiryListPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="font-semibold text-[#0F172A] block mb-1">Assigned Team Member</label>
-                    <select
-                      value={assignedTo}
-                      onChange={(e) => setAssignedTo(e.target.value)}
-                      className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden font-medium cursor-pointer"
-                    >
-                      {users.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.fullName} ({u.role})
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={assignedTo}
+                        onChange={(e) => setAssignedTo(e.target.value)}
+                        className="w-full appearance-none rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] pl-3 pr-8 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-blue-100 font-medium cursor-pointer shadow-xs transition-all"
+                      >
+                        {users.length > 0 ? (
+                          users.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.fullName} ({u.role})
+                            </option>
+                          ))
+                        ) : (
+                          <option value="usr-001">Tamil Selvan (Admin)</option>
+                        )}
+                      </select>
+                      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#64748B] pointer-events-none" />
+                    </div>
                   </div>
 
                   <div>
                     <label className="font-semibold text-[#0F172A] block mb-1">Lead Priority</label>
-                    <select
-                      value={priority}
-                      onChange={(e) => setPriority(e.target.value as EnquiryPriority)}
-                      className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden font-medium cursor-pointer"
-                    >
-                      <option value="Low">Low Priority</option>
-                      <option value="Medium">Medium Priority</option>
-                      <option value="High">High Priority</option>
-                      <option value="Urgent">Urgent / Hot Lead</option>
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={priority}
+                        onChange={(e) => setPriority(e.target.value as EnquiryPriority)}
+                        className="w-full appearance-none rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] pl-3 pr-8 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-blue-100 font-medium cursor-pointer shadow-xs transition-all"
+                      >
+                        <option value="Low">Low Priority</option>
+                        <option value="Medium">Medium Priority</option>
+                        <option value="High">High Priority</option>
+                        <option value="Urgent">Urgent / Hot Lead</option>
+                      </select>
+                      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#64748B] pointer-events-none" />
+                    </div>
                   </div>
 
                   <div>
                     <label className="font-semibold text-[#0F172A] block mb-1">Initial Status</label>
-                    <select
-                      value={initialStatus}
-                      onChange={(e) => setInitialStatus(e.target.value as EnquiryStatus)}
-                      className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-hidden font-medium cursor-pointer"
-                    >
-                      <option value="New">New Lead</option>
-                      <option value="Contacted">Contacted</option>
-                      <option value="Qualified">Qualified</option>
-                      <option value="Proposal">Proposal</option>
-                      <option value="Negotiation">Negotiation</option>
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={initialStatus}
+                        onChange={(e) => setInitialStatus(e.target.value as EnquiryStatus)}
+                        className="w-full appearance-none rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] pl-3 pr-8 py-2 text-xs text-[#0F172A] focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-blue-100 font-medium cursor-pointer shadow-xs transition-all"
+                      >
+                        <option value="New">New Lead</option>
+                        <option value="Contacted">Contacted</option>
+                        <option value="Qualified">Qualified</option>
+                        <option value="Proposal">Proposal</option>
+                        <option value="Negotiation">Negotiation</option>
+                      </select>
+                      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#64748B] pointer-events-none" />
+                    </div>
                   </div>
                 </div>
 
@@ -1581,8 +1656,8 @@ export default function EnquiryListPage() {
                     rows={2}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Enter any specific customer remarks, technology preferences, or initial discussion points..."
-                    className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] placeholder-[#94A3B8] focus:bg-white focus:border-[#2563EB] focus:outline-hidden font-medium"
+                    placeholder="Enter any specific customer remarks, services details, or initial discussion points..."
+                    className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-xs text-[#0F172A] placeholder-[#94A3B8] focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-blue-100 font-medium transition-all"
                   />
                 </div>
               </div>

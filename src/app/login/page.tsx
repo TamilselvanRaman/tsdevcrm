@@ -2,13 +2,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Lock, Mail, AlertCircle, ShieldCheck } from "lucide-react";
+import { ArrowRight, Lock, Mail, AlertCircle, ShieldCheck, UserCheck, Shield } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { registerUser, signInUser } from "@/lib/firebaseAuth";
+import {
+  findAuthorizedAccount,
+  AUTHORIZED_ADMINS,
+  AUTHORIZED_MEMBERS,
+} from "@/lib/authorizedUsers";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { loginAsAdmin, loginAsTeamMember, users } = useAppStore();
+  const { loginAsAdmin, loginAsTeamMember } = useAppStore();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,11 +23,11 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanEmail = email.trim().toLowerCase();
+    const inputIdentifier = email.trim().toLowerCase();
     const cleanPassword = password.trim();
 
-    if (!cleanEmail || !cleanPassword) {
-      setErrorMessage("Please enter both work email and password.");
+    if (!inputIdentifier || !cleanPassword) {
+      setErrorMessage("Please enter both username/email and password.");
       return;
     }
 
@@ -30,56 +35,48 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // 1. Firebase Authentication Verification with registration fallback
+      // 1. Strict Whitelist Check — ONLY authorized Admins and Members allowed
+      const authAccount = findAuthorizedAccount(inputIdentifier);
+      if (!authAccount) {
+        throw new Error("Incorrect username or password. Access is restricted to authorized TS DEV users only.");
+      }
+
+      // 2. Firebase Authentication
       try {
-        await signInUser(cleanEmail, cleanPassword);
+        await signInUser(authAccount.email, cleanPassword);
       } catch (authErr: any) {
-        console.warn("SignIn attempt notice, attempting auto-register/sign-in fallback:", authErr);
+        // If the authorized account doesn't exist yet in Firebase Auth, auto-provision it with their chosen password
         try {
-          await registerUser(cleanEmail, cleanPassword);
+          await registerUser(authAccount.email, cleanPassword);
         } catch (regErr: any) {
-          if (authErr.code === "auth/invalid-credential" || authErr.code === "auth/wrong-password") {
-            throw new Error("Invalid password for " + cleanEmail + ". Please check your password.");
-          }
-          throw new Error("Authentication failed. Please verify your email and password.");
+          // If registration also fails because the account exists in Firebase Auth, then the password was wrong
+          throw new Error("Incorrect username or password. Please verify your credentials.");
         }
       }
 
-      // 2. Look up matching user in store (with sanitized email)
-      const matchingUser = users.find(
-        (u) =>
-          u.email.trim().toLowerCase() === cleanEmail ||
-          (u.username && u.username.trim().toLowerCase() === cleanEmail)
-      );
-
-      // 3. Domain & Role Access Determination
-      // Admin accounts end with @tsdev.io or have Admin role in store/database
-      const isAdminDomain = cleanEmail.endsWith("@tsdev.io");
-      const isAdminRole = matchingUser?.role === "Admin";
-
-      if (isAdminDomain || isAdminRole) {
-        const adminId = matchingUser?.id || "usr-admin-1";
-        loginAsAdmin(adminId);
+      // 3. Route based on verified Account Type
+      if (authAccount.accountType === "admin") {
+        loginAsAdmin(authAccount.id);
         router.push("/crm/admin");
       } else {
-        // Team Members (@gmail.com) route to Team Member Portal
-        const memberId =
-          matchingUser?.id ||
-          users.find((u) => u.role !== "Admin")?.id ||
-          "usr-002";
-        loginAsTeamMember(memberId);
+        loginAsTeamMember(authAccount.id);
         router.push("/crm/member/dashboard");
       }
     } catch (err: any) {
-      setErrorMessage(err.message || "Invalid email or password. Please verify your credentials.");
+      setErrorMessage(err.message || "Incorrect username or password.");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleQuickFill = (emailVal: string) => {
+    setEmail(emailVal);
+    setErrorMessage("");
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-blue-50/40 flex flex-col justify-center items-center p-4 select-none">
-      <div className="w-full max-w-md space-y-6 animate-in fade-in zoom-in-95 duration-200">
+      <div className="w-full max-w-lg space-y-6 animate-in fade-in zoom-in-95 duration-200">
         {/* Brand Logo & Header */}
         <div className="text-center space-y-2 flex flex-col items-center">
           <div className="h-16 w-16 rounded-2xl bg-slate-950 overflow-hidden shadow-xl border border-slate-800 p-2 mb-1 flex items-center justify-center">
@@ -106,16 +103,16 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-4 text-xs">
             {/* Email Address */}
             <div className="space-y-1.5">
-              <label className="font-bold text-[#0F172A] block">Work Email Address</label>
+              <label className="font-bold text-[#0F172A] block">Work Email or Username</label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-3 h-4 w-4 text-[#94A3B8]" />
                 <input
-                  type="email"
+                  type="text"
                   required
-                  placeholder="name@tsdev.io or your registered email"
+                  placeholder="e.g. ceittamilselvanr26@tsdev.io or vishalbharath566@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] pl-10 pr-3 py-2.5 text-xs text-[#0F172A] font-medium placeholder:text-[#94A3B8] focus:bg-white focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20 focus:outline-hidden transition-all"
+                  className="w-full rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] pl-10 pr-3 py-2.5 text-xs text-[#0F172A] font-medium placeholder:text-[#94A3B8] focus:bg-white focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20 focus:outline-none transition-all"
                 />
               </div>
             </div>
@@ -133,7 +130,7 @@ export default function LoginPage() {
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] pl-10 pr-3 py-2.5 text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:bg-white focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20 focus:outline-hidden transition-all"
+                  className="w-full rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] pl-10 pr-3 py-2.5 text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:bg-white focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20 focus:outline-none transition-all"
                 />
               </div>
             </div>
@@ -169,10 +166,66 @@ export default function LoginPage() {
             </button>
           </form>
 
+          {/* Authorized Accounts Directory */}
+          <div className="pt-3 border-t border-[#E2E8F0] space-y-3">
+            <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider flex items-center gap-1.5">
+              <UserCheck className="h-3.5 w-3.5 text-[#2563EB]" />
+              Authorized Accounts Directory
+            </div>
+
+            <div className="space-y-2 text-xs">
+              {/* Admins */}
+              <div>
+                <span className="text-[10px] font-bold text-[#0F172A] uppercase flex items-center gap-1 mb-1">
+                  <Shield className="h-3 w-3 text-[#2563EB]" />
+                  Admins (@tsdev.io)
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                  {AUTHORIZED_ADMINS.map((acc) => (
+                    <button
+                      key={acc.email}
+                      type="button"
+                      onClick={() => handleQuickFill(acc.email)}
+                      className="text-left p-1.5 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] hover:bg-blue-50 hover:border-blue-200 transition-colors cursor-pointer group"
+                    >
+                      <div className="font-bold text-[#0F172A] group-hover:text-[#2563EB] truncate text-[11px]">
+                        {acc.fullName}
+                      </div>
+                      <div className="text-[9px] text-[#64748B] truncate">{acc.email}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Members */}
+              <div>
+                <span className="text-[10px] font-bold text-[#0F172A] uppercase flex items-center gap-1 mb-1 pt-1">
+                  <UserCheck className="h-3 w-3 text-[#16A34A]" />
+                  Members (@gmail.com)
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                  {AUTHORIZED_MEMBERS.map((acc) => (
+                    <button
+                      key={acc.email}
+                      type="button"
+                      onClick={() => handleQuickFill(acc.email)}
+                      className="text-left p-1.5 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] hover:bg-emerald-50 hover:border-emerald-200 transition-colors cursor-pointer group"
+                    >
+                      <div className="font-bold text-[#0F172A] group-hover:text-[#16A34A] truncate text-[11px]">
+                        {acc.fullName}
+                      </div>
+                      <div className="text-[9px] text-[#64748B] truncate">{acc.email}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Security Badge Footer */}
-          <div className="pt-4 border-t border-[#E2E8F0] text-center">
-            <span className="text-[11px] text-[#64748B] font-semibold flex items-center justify-center gap-1.5">
-              <ShieldCheck className="h-4 w-4 text-[#16A34A]" />
+          <div className="pt-2 border-t border-[#E2E8F0] text-center">
+            <span className="text-[10px] text-[#64748B] font-semibold flex items-center justify-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5 text-[#16A34A]" />
               Secured by Firebase Authentication & Role-Based Access Control
             </span>
           </div>

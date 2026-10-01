@@ -14,7 +14,7 @@ import {
   X,
   Check,
 } from "lucide-react";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore, SYSTEM_FALLBACK_USER } from "@/store/useAppStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DailyWorkReport } from "@/types";
@@ -22,7 +22,7 @@ import { DailyWorkReport } from "@/types";
 export default function DailyWorkPage() {
   const { currentUserId, users, tasks, dailyReports, submitDailyReport, updateDailyReport, deleteDailyReport } = useAppStore();
 
-  const currentUser = users.find((u) => u.id === currentUserId) || users[0];
+  const currentUser = users.find((u) => u.id === currentUserId) || users[0] || SYSTEM_FALLBACK_USER;
   const myTasks = tasks.filter((t) => t.assignedTo === currentUser?.id || t.assignedToName === currentUser?.fullName);
 
   const completedToday = myTasks.filter((t) => t.status === "COMPLETED");

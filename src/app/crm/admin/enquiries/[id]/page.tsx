@@ -24,7 +24,7 @@ import {
   X,
   Check,
 } from "lucide-react";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore, SYSTEM_FALLBACK_USER } from "@/store/useAppStore";
 import { EnquiryStatus, EnquiryPriority } from "@/types";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
@@ -43,7 +43,7 @@ export default function EnquiryDetailsPage() {
     updateEnquiry,
     deleteEnquiry,
   } = useAppStore();
-  const currentUser = users.find((u) => u.id === currentUserId) || users[0];
+  const currentUser = users.find((u) => u.id === currentUserId) || users[0] || SYSTEM_FALLBACK_USER;
 
   const [activeTab, setActiveTab] = useState<"Overview" | "Activity" | "Notes" | "Files">("Overview");
   const [noteInput, setNoteInput] = useState("");
@@ -309,7 +309,7 @@ export default function EnquiryDetailsPage() {
                     onSubmit={(e) => {
                       e.preventDefault();
                       if (!noteInput.trim()) return;
-                      addEnquiryNote(enquiry.id, noteInput.trim(), currentUser.fullName);
+                      addEnquiryNote(enquiry.id, noteInput.trim(), currentUser?.fullName || "Admin");
                       setNoteInput("");
                     }}
                     className="space-y-2 p-3.5 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC]"
@@ -319,7 +319,7 @@ export default function EnquiryDetailsPage() {
                       rows={2}
                       value={noteInput}
                       onChange={(e) => setNoteInput(e.target.value)}
-                      placeholder={`Write a note as ${currentUser.fullName}...`}
+                      placeholder={`Write a note as ${currentUser?.fullName || "Admin"}...`}
                       className="w-full rounded-lg border border-[#E2E8F0] bg-white p-2.5 text-xs text-[#0F172A] placeholder-[#64748B] focus:outline-hidden focus:border-[#2563EB]"
                     />
                     <div className="flex justify-end">

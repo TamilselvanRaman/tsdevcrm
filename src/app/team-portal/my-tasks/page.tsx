@@ -17,7 +17,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore, SYSTEM_FALLBACK_USER } from "@/store/useAppStore";
 import { Task, TaskPriority, TaskStatus } from "@/types";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -50,7 +50,7 @@ export default function MyTasksPage() {
   const [actualHours, setActualHours] = useState(0);
   const [description, setDescription] = useState("");
 
-  const currentUser = users.find((u) => u.id === currentUserId) || users[0];
+  const currentUser = users.find((u) => u.id === currentUserId) || users[0] || SYSTEM_FALLBACK_USER;
   const myTasks = tasks.filter((t) => t.assignedTo === currentUser?.id || t.assignedToName === currentUser?.fullName);
 
   const todayStr = new Date().toISOString().split("T")[0];

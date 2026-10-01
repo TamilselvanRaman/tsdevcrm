@@ -86,8 +86,8 @@ import {
 export type PortalMode = "admin" | "team_member";
 
 export const SYSTEM_FALLBACK_USER: User = {
-  id: "usr-admin-1",
-  fullName: "Tamil Selvan R",
+  id: "usr-001",
+  fullName: "Tamil Selvan",
   email: "ceittamilselvanr26@tsdev.io",
   username: "tamilselvanr",
   phone: "+91 98765 43210",
@@ -310,7 +310,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
     const unsubUsers = subscribeUsers((list) => {
       if (list !== undefined && list !== null) {
-        set({ users: list });
+        if (list.length === 0) {
+          saveUser(SYSTEM_FALLBACK_USER).catch(() => {});
+          set({ users: [SYSTEM_FALLBACK_USER] });
+        } else {
+          set({ users: list });
+        }
       }
     });
     const unsubReports = subscribeDailyReports((list) => {
@@ -366,7 +371,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
 
 
-  users: [],
+  users: [SYSTEM_FALLBACK_USER],
   enquiries: [],
   projects: [],
   tasks: [],
@@ -478,7 +483,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       enquiries: s.enquiries.map((e) => {
         if (e.id === id) {
           const activities = [
-            ...e.activities,
+            ...(e.activities || []),
             {
               id: `act-${Date.now()}`,
               text: `Status updated to ${status}`,
@@ -500,7 +505,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       enquiries: s.enquiries.map((e) => {
         if (e.id === id) {
           const activities = [
-            ...e.activities,
+            ...(e.activities || []),
             {
               id: `act-${Date.now()}`,
               text: `Assigned to ${memberName}`,
@@ -527,7 +532,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             timestamp: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
             author,
           };
-          const updated = { ...e, notes: [newNote, ...e.notes] };
+          const updated = { ...e, notes: [newNote, ...(e.notes || [])] };
           saveEnquiry(updated).catch(() => {});
           return updated;
         }
@@ -743,7 +748,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   addComment: (taskId, commentText) => {
-    const user = get().users.find((u) => u.id === get().currentUserId) || get().users[0];
+    const user = get().users.find((u) => u.id === get().currentUserId) || get().users[0] || SYSTEM_FALLBACK_USER;
     set((s) => ({
       tasks: s.tasks.map((t) => {
         if (t.id === taskId) {
@@ -882,7 +887,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Daily Work
   submitDailyReport: (reportData) => {
-    const user = get().users.find((u) => u.id === reportData.memberId) || get().users[0];
+    const user = get().users.find((u) => u.id === reportData.memberId) || get().users[0] || SYSTEM_FALLBACK_USER;
     const newReport: DailyWorkReport = {
       ...reportData,
       id: `dwr-${Date.now()}`,
@@ -941,7 +946,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Attendance
   checkIn: (memberId) => {
-    const user = get().users.find((u) => u.id === memberId) || get().users[0];
+    const user = get().users.find((u) => u.id === memberId) || get().users[0] || SYSTEM_FALLBACK_USER;
     const today = new Date().toISOString().split("T")[0];
     const timeStr = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 
